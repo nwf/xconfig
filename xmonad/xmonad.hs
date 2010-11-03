@@ -3,29 +3,39 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DoRec #-}
 
 import           XMonad
+import qualified XMonad.Core as C
 import qualified XMonad.Actions.CycleWS as CWS
+import qualified XMonad.Actions.Eval as AE
 import qualified XMonad.Actions.Warp as AW
 import qualified XMonad.Hooks.DynamicLog as HDL
 import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
 import qualified XMonad.Layout as L
 import qualified XMonad.Layout.ResizableTile as LRT
-import qualified XMonad.Prompt as XP
-import qualified XMonad.Prompt.Window as XPW
-import qualified XMonad.StackSet as SS
-import qualified XMonad.Util.Cursor as XUC
-import qualified XMonad.Util.ExtensibleState as XUE
+import qualified XMonad.Prompt as P
+import qualified XMonad.Prompt.Input as PI
+import qualified XMonad.Prompt.Window as PW
+import qualified XMonad.StackSet as S
+import qualified XMonad.Util.Cursor as UC
+import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.EZConfig as EZC
-import qualified XMonad.Util.Run as XUR
-import qualified XMonad.Util.WindowProperties as XUW
+import qualified XMonad.Util.Run as UR
+import qualified XMonad.Util.WindowProperties as UW
 
-import Data.Bits ((.|.))
-import Data.Ratio ((%))
+import Control.Concurrent (forkOS)
+import Control.Concurrent.MVar
+import Control.Exception (try, SomeException)
 import Control.Monad (ap,liftM)
+import Control.Monad.Fix (fix)
+import Data.Bits ((.|.))
+import qualified Data.IntMap as IM
+import Data.Monoid (All(All))
+import Data.Ratio ((%))
 import System.IO (Handle, hPutStrLn, stderr)
-import System.Posix.Process (executeFile)
+import System.Posix.Process (executeFile, getProcessStatus, ProcessStatus(..), getProcessID)
 import System.Posix.Signals (signalProcess, keyboardSignal)
 import System.Posix.Types (ProcessID)
 
@@ -34,7 +44,7 @@ import Graphics.X11.Xinerama (getScreenInfo)
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Utility functions {{{
 
-killpid :: ProcessID -> X ()
+killpid :: MonadIO m => ProcessID -> m ()
 killpid = io . signalProcess keyboardSignal
 
 getScreenCount :: X Int
@@ -43,23 +53,66 @@ getScreenCount = liftM length $ withDisplay $ io . getScreenInfo
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- XMobar management {{{
 
-data XMobars = XMobars [Maybe (Handle, ProcessID)] deriving Typeable
-instance ExtensionClass XMobars where initialValue = XMobars []
+data XMobars = XMobars (IM.IntMap (MVar (Maybe (Handle, ProcessID))))
+    deriving Typeable
+instance ExtensionClass XMobars where initialValue = XMobars IM.empty
+
+spawnxmobar ix vv = do
+   v <- liftM Just . UR.spawnPipePid $
+                    "exec xmobar -x " ++ (show ix) ++ " " ++ "$HOME/lib/X/xmobarrc"
+   () <- io $ putMVar vv v
+   case v of
+      Nothing -> return () -- no point in waiting
+      Just (_,pid) -> waitxmobardeath vv pid >> return ()
+   return (ix, vv)
+ where
+  waitxmobardeath mv pid = io $ forkOS $ fix $ \f -> do
+    r <- try $ getProcessStatus True False pid
+    case r of
+        Left (_ :: SomeException)   -> done
+        Right (Nothing)             -> done
+        Right (Just (Exited _))     -> done
+        Right (Just (Terminated _)) -> done
+        Right (Just (Stopped _))    -> f
+   where done = modifyMVar_ mv (const $ return Nothing)
+
+
+killxmobars_ xs = do
+  io $ mapM_ (\x -> takeMVar x
+                    >>= maybe (return ()) (killpid . snd)
+                    >>  putMVar x Nothing)
+             (IM.elems xs)
 
 respawnxmobars :: X ()
 respawnxmobars = do
   screencount <- getScreenCount
-  XMobars cxmbars <- XUE.get
-  let (stay, tokill) = splitAt screencount cxmbars
-  mapM_ (maybe (return ()) (killpid . snd)) tokill
-  new <- mapM (\ix -> liftM Just . XUR.spawnPipePid $
-                        "xmobar -x " ++ (show ix) ++ " " ++ "$HOME/lib/X/xmobarrc")
-              [(length stay)..(screencount-1)]
-  XUE.put . XMobars $ stay ++ new
+  XMobars cxmbars <- UE.get
+  let (stay, tokill) = IM.split screencount cxmbars
+  killxmobars_ tokill
+  new <- mapM (\ix -> io $ newEmptyMVar >>= spawnxmobar ix)
+              [(IM.size stay)..(screencount-1)]
+  UE.put . XMobars $ IM.union stay (IM.fromAscList new)
 
 killxmobars :: X ()
-killxmobars = XUE.get >>= \(XMobars n) ->
-              mapM_ (maybe (return ()) (killpid . snd)) n
+killxmobars = do
+  (XMobars old) <- UE.get
+  killxmobars_ old
+
+toggleanxmobar :: ScreenId -> X ()
+toggleanxmobar (S scr) = do
+  XMobars cxmbars <- UE.get
+  case IM.lookup scr cxmbars of
+    Just mxv -> do
+        mx <- io $ takeMVar mxv
+        case mx of
+            Nothing -> spawnxmobar scr mxv >> return ()
+            Just (_,p) -> killpid p >> io (putMVar mxv Nothing)
+    Nothing -> return ()
+
+togglemyxmobar :: X ()
+togglemyxmobar = do
+  cws <- gets windowset
+  toggleanxmobar (S.screen $ S.current $ cws)
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------- Management hook {{{
@@ -72,8 +125,8 @@ killxmobars = XUE.get >>= \(XMobars n) ->
 myManageHook = composeAll . concat $
 	[ [ className   =? c --> doFloat           | c <- myClassFloats]
 	, [ title       =? t --> doFloat           | t <- myTitleFloats]
-	, [ okularQuery --> doF (SS.shift "5") ]
-	, [ className   =? "Iceweasel" --> doF (SS.shift "4") ]
+	, [ okularQuery --> doF (S.shift "5") ]
+	, [ className   =? "Iceweasel" --> doF (S.shift "4") ]
 	, [ HMH.composeOne [ HMH.isFullscreen HMH.-?> HMH.doFullFloat ] ]
 	-- , [ HMH.composeOne [ isKDEOverride HMH.-?> doFloat ] ]
 	]
@@ -81,10 +134,37 @@ myManageHook = composeAll . concat $
 		-- This grabs only Okular root windows, not any dialogs they throw
 		-- up.  Since I occasionally move Okulars to other workspaces, this
 		-- is handy.
-   okularQuery = XUW.propertyToQuery $
-		(XUW.ClassName "Okular") `XUW.And` (XUW.Role "okular::Shell")
+   okularQuery = UW.propertyToQuery $
+		(UW.ClassName "Okular") `UW.And` (UW.Role "okular::Shell")
    myClassFloats = ["XVkbd"]
    myTitleFloats = ["KCharSelect"]
+
+----------------------------------------------------------------------- }}}
+------------------------------------------------------------ Event hook {{{
+
+myEventHook :: Event -> X All
+myEventHook (ConfigureEvent {ev_window = w}) = do
+    whenX (isRoot w) respawnxmobars
+    return (All True)
+myEventHook _ = return (All True)
+
+----------------------------------------------------------------------- }}}
+--------------------------------------------- Action.Eval configuration {{{
+
+myEvalConfig :: AE.EvalConfig
+myEvalConfig = AE.defaultEvalConfig {AE.imports = [("Prelude",Nothing)
+                                                  ,("System.IO",Nothing)
+                                                  ,("XMonad",Nothing)
+                                                  ,("XMonad.Core",Just "C")
+                                                  ,("XMonad.StackSet",Just "SS")
+                                                  ]
+                                    }
+
+evalprompt = PI.inputPrompt P.defaultXPConfig "Eval"
+             >>= \x -> case x of
+                         Just s -> AE.evalExpressionWithReturn myEvalConfig s
+                                   >>= io . hPutStrLn stderr
+                         Nothing -> return ()
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Keyboard handling {{{
@@ -105,14 +185,12 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm, xK_equal), CWS.nextWS  )
 		-- mod-a %! Warp to top left of currently focused window
     , ((modm, xK_a    ), AW.warpToWindow (1%10) (1%10))
-		-- mod-b %! Toggle Struts
-    , ((modm, xK_b), sendMessage HMD.ToggleStruts)
         -- mod-f %! Pull up Bring menu
-    , ((modm, xK_f    ), XPW.windowPromptBring XP.defaultXPConfig)
+    , ((modm, xK_f    ), PW.windowPromptBring P.defaultXPConfig)
         -- mod-g %! Pull up Goto menu
-    , ((modm, xK_g    ), XPW.windowPromptGoto  XP.defaultXPConfig)
+    , ((modm, xK_g    ), PW.windowPromptGoto  P.defaultXPConfig)
         -- mod-G %! Pull up Goto menu filtered for active workspace
-    , ((modm .|. shiftMask, xK_g    ), XPW.windowPromptGotoCurrent  XP.defaultXPConfig)
+    , ((modm .|. shiftMask, xK_g    ), PW.windowPromptGotoCurrent  P.defaultXPConfig)
 		-- mod-o %! Pull up chraracter selector
 	, ((modm .|. shiftMask, xK_o    ), spawn "kcharselect")
         -- XF86ScreenSaver or XF86PowerOff lock the screen
@@ -121,10 +199,16 @@ addKeys conf@(XConfig {modMask = modm}) =
 		-- for ResizableTall layouts
     , ((modm .|. shiftMask, xK_l ), sendMessage LRT.MirrorShrink)
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
-		-- 
+		-- mod-b %! Toggle Struts
+    , ((modm, xK_b), smhmdts)
+		-- mod-B %! Toggle xmobar
+    , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
+        -- mod-t %! haskell prompt
+    , ((modm, xK_t ), evalprompt )
 	]
   where
    xsl = spawn "xscreensaver-command -lock"
+   smhmdts = sendMessage HMD.ToggleStruts
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------------ Main {{{
@@ -159,16 +243,16 @@ main = do
             -- io $ signalProcess keyboardSignal trayp
             killxmobars
       , startupHook = do
-            XUC.setDefaultCursor XUC.xC_left_ptr
+            UC.setDefaultCursor UC.xC_left_ptr
             respawnxmobars
       , manageHook = manageHook defaultConfig <+> HMD.manageDocks <+> myManageHook
       , logHook = do
-           XMobars cxmbars <- XUE.get
+           XMobars cxmbars <- UE.get
            HDL.dynamicLogWithPP $ HDL.xmobarPP
                    { HDL.ppOutput = \o ->
-                       mapM_ (maybe (return ())
+                       mapM_ (\x -> readMVar x >>= maybe (return ())
                                     (\(h,_) -> hPutStrLn h o))
-                             cxmbars
+                             (IM.elems cxmbars)
                    , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 20
                    }
       , layoutHook = HMD.avoidStruts
