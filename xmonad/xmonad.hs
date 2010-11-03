@@ -8,6 +8,7 @@
 import           XMonad
 import qualified XMonad.Core as C
 import qualified XMonad.Actions.CycleWS as CWS
+import qualified XMonad.Actions.DynamicWorkspaces as ADW
 import qualified XMonad.Actions.Eval as AE
 import qualified XMonad.Actions.Warp as AW
 import qualified XMonad.Hooks.DynamicLog as HDL
@@ -42,6 +43,8 @@ import System.Posix.Signals (signalProcess, keyboardSignal)
 import System.Posix.Types (ProcessID)
 
 import Graphics.X11.Xinerama (getScreenInfo)
+
+type Key = (KeyMask, KeySym)
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Utility functions {{{
@@ -127,6 +130,19 @@ togglemyxmobar = do
   toggleanxmobar (S.screen $ S.current $ cws)
 
 ----------------------------------------------------------------------- }}}
+------------------------------------------------------ Named Workspaces {{{
+
+-- This list gets used inside Keyboard handling and Main, below.
+-- The names on it are used inside the management hook.
+--
+namedwksptags = [ ("c", xK_F1)   -- "communication"
+                , ("w", xK_F2)   -- "web"
+                , ("d", xK_F3)   -- "documents"
+                , ("m", xK_F4)   -- "media"
+                , ("p", xK_F5)   -- "presentation"
+                ]
+
+----------------------------------------------------------------------- }}}
 ------------------------------------------------------- Management hook {{{
 
 -- isKDEOverride = do
@@ -137,8 +153,9 @@ togglemyxmobar = do
 myManageHook = composeAll . concat $
     [ [ className   =? c --> doFloat           | c <- myClassFloats]
     , [ title       =? t --> doFloat           | t <- myTitleFloats]
-    , [ okularQuery --> doF (S.shift "5") ]
-    , [ className   =? "Iceweasel" --> doF (S.shift "4") ]
+    , [ className   =? "Iceweasel" --> doF (S.shift "w") ]
+    , [ okularWin        --> doF (S.shift "d") ]
+    , [ okularPresent    --> doF (S.shift "p") ]
     , [ HMH.composeOne [ HMH.isFullscreen HMH.-?> HMH.doFullFloat ] ]
     -- , [ HMH.composeOne [ isKDEOverride HMH.-?> doFloat ] ]
     ]
@@ -146,8 +163,10 @@ myManageHook = composeAll . concat $
     -- This grabs only Okular root windows, not any dialogs they throw
     -- up.  Since I occasionally move Okulars to other workspaces, this
     -- is handy.
-   okularQuery = UW.propertyToQuery $
+   okularWin     = UW.propertyToQuery $
      (UW.ClassName "Okular") `UW.And` (UW.Role "okular::Shell")
+   okularPresent = UW.propertyToQuery $
+     (UW.ClassName "Okular") `UW.And` (UW.Role "presentationWidget")
    myClassFloats = ["XVkbd", "Xmessage"]
    myTitleFloats = ["KCharSelect"]
 
@@ -169,7 +188,7 @@ myEvalConfig = AE.defaultEvalConfig {AE.imports = [("Prelude",Nothing)
                                                   ,("System.IO",Nothing)
                                                   ,("XMonad",Nothing)
                                                   ,("XMonad.Core",Nothing)
-                                                  ,("XMonad.StackSet",Just "SS")
+                                                  ,("XMonad.StackSet",Just "S")
                                                   ,("XMonad.Util.ExtensibleState",Just "UE")
                                                   ]
                                     ,AE.handleError = \err ->
@@ -181,8 +200,6 @@ evalprompt = asks (messageHook.config)
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Keyboard handling {{{
-
-type Key = (KeyMask, KeySym)
 
 delKeys :: XConfig l -> [Key]
 delKeys conf@(XConfig {modMask = modm}) = []
@@ -216,9 +233,11 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm, xK_b), smhmdts)
         -- mod-B %! Toggle xmobar
     , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
-        -- mod-t %! haskell prompt
-    , ((modm, xK_t ), evalprompt )
-    ]
+        -- mod-v %! haskell prompt
+    , ((modm, xK_v ), evalprompt )
+    ] ++ [((modm .|. m, k), windows $ f i)
+          | (i, k) <- namedwksptags
+          , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask)]]
   where
    xsl = spawn "xscreensaver-command -lock"
    smhmdts = sendMessage HMD.ToggleStruts
@@ -252,6 +271,7 @@ main = do
   xmonad $ customKeys defaultConfig
       { modMask = mod4Mask
       , terminal = "urxvtcd"
+      , workspaces = workspaces defaultConfig ++ map fst namedwksptags
       , shutdownHook = do
             -- io $ signalProcess keyboardSignal trayp
             killxmobars
@@ -284,4 +304,4 @@ main = do
 -- Urgency hooks
 
 -- VIM modeline, huzzah
--- vim: tw=76 ts=4 expandtab nu foldmethod=marker
+-- vim: tw=76 ts=4 expandtab nu ai foldmethod=marker
