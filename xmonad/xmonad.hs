@@ -209,8 +209,10 @@ myEvalConfig = AE.defaultEvalConfig {AE.imports = [("Prelude",Nothing)
                                         return $ "Error: " ++ replace (show err) "\\n" "\n"
                                     }
 
-evalprompt = asks (messageHook.config) 
-    >>= PE.evalPromptWithOutput myEvalConfig P.defaultXPConfig
+evalprompt = do
+    a <- asks (messageHook.config) 
+    PE.evalPromptWithOutput myEvalConfig P.defaultXPConfig $
+        \r -> when (not $ r `elem` ["()",""]) (a r)
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Keyboard handling {{{
