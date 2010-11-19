@@ -15,6 +15,7 @@ import qualified XMonad.Hooks.DynamicLog as HDL
 import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
 import qualified XMonad.Layout as L
+import qualified XMonad.Layout.IndependentScreens as LIS
 import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Prompt as P
 import qualified XMonad.Prompt.Eval as PE
@@ -51,9 +52,6 @@ type Key = (KeyMask, KeySym)
 
 killpid :: MonadIO m => ProcessID -> m ()
 killpid = io . signalProcess keyboardSignal
-
-getScreenCount :: X Int
-getScreenCount = liftM length $ withDisplay $ io . getScreenInfo
 
 -- In here due to the apparent lack of a replace function in the standard
 -- library.  (Used for correctly displaying newlines in error messages)
@@ -99,7 +97,7 @@ killxmobars_ xs = do
 
 respawnxmobars :: X ()
 respawnxmobars = do
-  screencount <- getScreenCount
+  screencount <- LIS.countScreens
   XMobars cxmbars <- UE.get
   let (stay, tokill) = IM.split (screencount-1) cxmbars
   killxmobars_ tokill
