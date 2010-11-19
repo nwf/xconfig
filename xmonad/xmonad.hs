@@ -31,7 +31,7 @@ import qualified XMonad.Util.WindowProperties as UW
 import Control.Concurrent (forkOS)
 import Control.Concurrent.MVar
 import Control.Exception (try, SomeException)
-import Control.Monad (ap,liftM)
+import Control.Monad (ap,liftM,when)
 import Control.Monad.Fix (fix)
 import Data.Bits ((.|.))
 import qualified Data.IntMap as IM
@@ -65,11 +65,16 @@ replace _ _ _ = []
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- XMobar management {{{
 
+-- XXX This is not ideal; there should be a pure map of the user's intent
+-- and an impure map of the state of the child processes (and the user's
+-- intent).  That would let us persist the user's intent across restart.
+
 data XMobars = XMobars (IM.IntMap (MVar (Maybe (Handle, ProcessID))))
     deriving Typeable
 instance ExtensionClass XMobars where initialValue = XMobars IM.empty
 
 spawnxmobar ix vv = do
+   -- io $ hPutStrLn stderr $ "spawnanxmobar " ++ (show ix)
    v <- liftM Just . UR.spawnPipePid $
                     "exec xmobar -x " ++ (show ix) ++ " " ++ "$HOME/lib/X/xmobarrc"
    () <- io $ putMVar vv v
@@ -80,39 +85,50 @@ spawnxmobar ix vv = do
  where
   waitxmobardeath mv pid = io $ forkOS $ fix $ \f -> do
     r <- try $ getProcessStatus True False pid
-    io $ hPutStrLn stderr $ "waitxmobardeth " ++ (show pid)
+    -- io $ hPutStrLn stderr $ "waitxmobardeth " ++ (show ix) ++ " (" ++ (show pid) ++ ")"
     case r of
         Left (_ :: SomeException)   -> done
         Right (Nothing)             -> done
         Right (Just (Exited _))     -> done
         Right (Just (Terminated _)) -> done
         Right (Just (Stopped _))    -> f
-   where done = modifyMVar_ mv (const $ return Nothing)
+   where
+     done = do
+       o <- takeMVar mv
+       case o of
+         Just (_,p') | p' == pid -> putMVar mv Nothing
+         _  -> putMVar mv o
 
 killxmobars_ xs = do
   io $ mapM_ (\x -> takeMVar x
                     >>= maybe (return ()) (killpid . snd)
-                    >>  putMVar x Nothing)
-             (IM.elems xs)
+                    >> putMVar x Nothing)
+             xs
 
 respawnxmobars :: X ()
 respawnxmobars = do
   screencount <- LIS.countScreens
   XMobars cxmbars <- UE.get
-  let (stay, tokill) = IM.split (screencount-1) cxmbars
-  killxmobars_ tokill
-  new <- mapM (\ix -> io $ newEmptyMVar >>= spawnxmobar ix)
-              [(IM.size stay)..(screencount-1)]
-  UE.put . XMobars $ IM.union stay (IM.fromAscList new)
+  let (stay, mkill, kills) = IM.splitLookup screencount cxmbars
+  -- io $ hPutStrLn stderr $ "respawnxmobars " ++ (show screencount) ++ " " ++ (show $ IM.keys stay)
+  killxmobars_ $ maybe (id) (:) mkill (IM.elems kills)
+  new <- if (IM.size stay /= screencount)
+   then do spawned <- mapM (\ix -> io $ newEmptyMVar >>= spawnxmobar ix)
+                [(IM.size stay)..(screencount-1)]
+           return $ IM.union stay (IM.fromList spawned)
+   else return stay
+  UE.put $ XMobars new
+  XMobars cxmbars <- UE.get
+  -- io $ hPutStrLn stderr $ "respawnxmobars end " ++ (show screencount) ++ " " ++ (show $ IM.keys cxmbars)
 
 killxmobars :: X ()
 killxmobars = do
   (XMobars old) <- UE.get
-  killxmobars_ old
+  killxmobars_ (IM.elems old)
 
 toggleanxmobar :: ScreenId -> X ()
 toggleanxmobar (S scr) = do
-  io $ hPutStrLn stderr $ "toggleanxmobar " ++ (show scr)
+  -- io $ hPutStrLn stderr $ "toggleanxmobar " ++ (show scr)
   XMobars cxmbars <- UE.get
   case IM.lookup scr cxmbars of
     Just mxv -> do
@@ -299,6 +315,7 @@ main = do
 ----------------------------------------------------------------------- }}}
 
 -- TODO
+-- XMobar fixes (pure maps, multiple configurations)
 -- Urgency hooks
 
 -- VIM modeline, huzzah
