@@ -16,6 +16,7 @@ import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
 import qualified XMonad.Layout as L
 import qualified XMonad.Layout.IndependentScreens as LIS
+import qualified XMonad.Layout.LayoutHints as LLH
 import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Prompt as P
 import qualified XMonad.Prompt.Eval as PE
@@ -200,6 +201,8 @@ myEvalConfig :: AE.EvalConfig
 myEvalConfig = AE.defaultEvalConfig {AE.imports = [("Prelude",Nothing)
                                                   ,("Data.Map",Just "M")
                                                   ,("System.IO",Nothing)
+                                                  -- ,("System.Posix.IO",Nothing)
+                                                  -- ,("System.Posix.Types",Nothing)
                                                   ,("XMonad",Nothing)
                                                   ,("XMonad.Core",Nothing)
                                                   ,("XMonad.StackSet",Just "S")
@@ -304,7 +307,7 @@ main = do
                              (IM.elems cxmbars)
                    , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 20
                    }
-      , layoutHook = HMD.avoidStruts
+      , layoutHook = HMD.avoidStruts . LLH.layoutHintsWithPlacement (0.5, 0.5)
                            $ LRT.ResizableTall 1 (3/100) (1/2) []
                          ||| L.Mirror (L.Tall 1 (3/100) (1/2))
                          ||| L.Full
