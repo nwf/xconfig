@@ -118,7 +118,7 @@ respawnxmobars = do
            return $ IM.union stay (IM.fromList spawned)
    else return stay
   UE.put $ XMobars new
-  XMobars cxmbars <- UE.get
+  -- XMobars cxmbars <- UE.get
   -- io $ hPutStrLn stderr $ "respawnxmobars end " ++ (show screencount) ++ " " ++ (show $ IM.keys cxmbars)
 
 killxmobars :: X ()
