@@ -1,8 +1,5 @@
 5 patches for repository http://code.haskell.org/xmonad:
 
-Wed Nov  3 15:06:35 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Make xmonad use threaded runtime
-
 Wed Nov  3 19:31:28 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add shutdownHook configuration callback
 
@@ -19,31 +16,11 @@ Wed Nov  3 19:37:06 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
 Wed Nov  3 19:39:31 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add a messageHook to the configuration
 
+Sat Nov 20 20:29:54 EST 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Make xmonad use threaded runtime
+
 New patches:
 
-[Make xmonad use threaded runtime
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103190635
- Ignore-this: a7d51647791db7c6834e1bca260d5b96
-] {
-hunk ./XMonad/Core.hs 460
-         -- temporarily disable SIGCHLD ignoring:
-         uninstallSignalHandlers
-         status <- bracket (openFile err WriteMode) hClose $ \h ->
--            waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-o",binn] (Just dir)
-+            waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-threaded", "-o",binn] (Just dir)
-                                     Nothing Nothing Nothing (Just h)
- 
-         -- re-enable SIGCHLD:
-hunk ./XMonad/Operations.hs 420
-         maybeShow _ = Nothing
-         extState = return . show . catMaybes . map maybeShow . M.toList . extensibleState
-     args <- if resume then gets (\s -> "--resume":wsData s:extState s) else return []
--    catchIO (executeFile prog True args Nothing)
-+    catchIO (executeFile prog True (["+RTS", "-threaded", "--RTS"] ++ args) Nothing)
- 
- ------------------------------------------------------------------------
- -- | Floating layer support
-}
 [Add shutdownHook configuration callback
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103233128
  Ignore-this: 93966ddca3f66f719b41e4504f2ba451
@@ -167,7 +144,7 @@ hunk ./XMonad/Core.hs 458
 -        -- temporarily disable SIGCHLD ignoring:
 -        uninstallSignalHandlers
          status <- bracket (openFile err WriteMode) hClose $ \h ->
-             waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-threaded", "-o",binn] (Just dir)
+             waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-o",binn] (Just dir)
                                      Nothing Nothing Nothing (Just h)
 hunk ./XMonad/Core.hs 462
  
@@ -331,6 +308,18 @@ hunk ./XMonad/Core.hs 110
      , shutdownHook       :: !(X ())              -- ^ The action to perform on shutdown
      , focusFollowsMouse  :: !Bool                -- ^ Whether window entry events can change focus
 }
+[Make xmonad use threaded runtime
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101121012954
+ Ignore-this: 18abbd47312a071f838b5b45bdb50aa1
+] hunk ./XMonad/Core.hs 460
+     if force || any (binT <) (srcT : libTs)
+       then do
+         status <- bracket (openFile err WriteMode) hClose $ \h ->
+-            waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-o",binn] (Just dir)
++            waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-threaded", "-o",binn] (Just dir)
+                                     Nothing Nothing Nothing (Just h)
+ 
+         -- now, if it fails, run xmessage to let the user know:
 
 Context:
 
@@ -498,4 +487,4 @@ Spencer Janssen <spencerjanssen@gmail.com>**20091026004641
  Ignore-this: 80347d432f3b606c8d722536d0d729aa
 ] 
 Patch bundle hash:
-4762aa3a170deeaefb4085a47bddb7563f41dae9
+48e827b65a135ea05d0a19d5630700b807b1a308
