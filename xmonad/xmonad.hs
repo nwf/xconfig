@@ -37,7 +37,7 @@ import Control.Monad (ap,liftM,when)
 import Control.Monad.Fix (fix)
 import Data.Bits ((.|.))
 import qualified Data.IntMap as IM
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, stripPrefix)
 import Data.Monoid (All(All))
 import Data.Ratio ((%))
 import System.IO (Handle, hClose, hPutStr, hPutStrLn, stderr)
@@ -308,7 +308,8 @@ main = do
                        mapM_ (\x -> readMVar x >>= maybe (return ())
                                     (\(h,_) -> hPutStrLn h o))
                              (IM.elems cxmbars)
-                   , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 20
+                   , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 40
+                   , HDL.ppLayout = \s -> maybe s id $ stripPrefix "Hinted " s
                    }
       , layoutHook = HMD.avoidStruts . LLH.layoutHintsWithPlacement (0.5, 0.5)
                            $ LRT.ResizableTall 1 (3/100) (1/2) []
