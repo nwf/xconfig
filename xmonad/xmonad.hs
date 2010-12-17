@@ -11,6 +11,7 @@ import qualified XMonad.Actions.CycleWS as CWS
 import qualified XMonad.Actions.DynamicWorkspaces as ADW
 import qualified XMonad.Actions.Eval as AE
 import qualified XMonad.Actions.Warp as AW
+import qualified XMonad.Actions.WithAll as AWA
 import qualified XMonad.Hooks.DynamicLog as HDL
 import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
@@ -244,6 +245,8 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm, xK_g    ), PW.windowPromptGoto  P.defaultXPConfig)
         -- mod-G %! Pull up Goto menu filtered for active workspace
     , ((modm .|. shiftMask, xK_g    ), PW.windowPromptGotoCurrent  P.defaultXPConfig)
+        -- mod-T %! Sink everything on the current desktop
+    , ((modm .|. shiftMask, xK_t), AWA.sinkAll)
         -- mod-o %! Pull up chraracter selector
     , ((modm .|. shiftMask, xK_o    ), spawn "kcharselect")
         -- XF86ScreenSaver or XF86PowerOff lock the screen
