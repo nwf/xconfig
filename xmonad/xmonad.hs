@@ -166,11 +166,11 @@ namedwksptags = [ ("c", xK_F1)   -- "communication"
 --    return $! isover && (not isfs)
 
 myManageHook = composeAll . concat $
-    [ [ className   =? c --> doFloat           | c <- myClassFloats]
-    , [ title       =? t --> doFloat           | t <- myTitleFloats]
+    [ [ className   =? c           --> doFloat | c <- myClassFloats]
+    , [ title       =? t           --> doFloat | t <- myTitleFloats]
     , [ className   =? "Iceweasel" --> doF (S.shift "w") ]
-    , [ okularWin        --> doF (S.shift "d") ]
-    , [ okularPresent    --> doF (S.shift "p") ]
+    , [ okularWin                  --> doF (S.shift "d") ]
+    , [ okularPresent              --> doF (S.shift "p") ]
     , [ HMH.composeOne [ HMH.isFullscreen HMH.-?> HMH.doFullFloat ] ]
     -- , [ HMH.composeOne [ isKDEOverride HMH.-?> doFloat ] ]
     ]
@@ -234,6 +234,10 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm, xK_equal), CWS.nextWS  )
         -- mod-a %! Warp to top left of currently focused window
     , ((modm, xK_a    ), AW.warpToWindow (1%10) (1%10))
+        -- mod-b %! Toggle Struts
+    , ((modm, xK_b), smhmdts)
+        -- mod-B %! Toggle xmobar
+    , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
         -- mod-f %! Pull up Bring menu
     , ((modm, xK_f    ), PW.windowPromptBring P.defaultXPConfig)
         -- mod-g %! Pull up Goto menu
@@ -248,10 +252,6 @@ addKeys conf@(XConfig {modMask = modm}) =
         -- for ResizableTall layouts
     , ((modm .|. shiftMask, xK_l ), sendMessage LRT.MirrorShrink)
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
-        -- mod-b %! Toggle Struts
-    , ((modm, xK_b), smhmdts)
-        -- mod-B %! Toggle xmobar
-    , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
         -- mod-v %! haskell prompt
     , ((modm, xK_v ), evalprompt )
     ] ++ [((modm .|. m, k), windows $ f i)
