@@ -249,9 +249,10 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm .|. shiftMask, xK_t), AWA.sinkAll)
         -- mod-o %! Pull up chraracter selector
     , ((modm .|. shiftMask, xK_o    ), spawn "kcharselect")
-        -- XF86ScreenSaver or XF86PowerOff lock the screen
+        -- XF86ScreenSaver %! Lock the screen
+        -- mod-x %! Lock the screen
     , ((0, 0x1008ff2d ), xsl)
-    , ((0, 0x1008ff2a ), xsl)
+    , ((modm, xK_x    ), xsl)
         -- for ResizableTall layouts
     , ((modm .|. shiftMask, xK_l ), sendMessage LRT.MirrorShrink)
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
