@@ -1,20 +1,22 @@
 Config {
         bgColor = "black"
        , fgColor = "darkgoldenrod"
-       , position = TopW L 94
+       , position = TopW L 100 
        , lowerOnStart = False
        , commands = [ Run Weather "KBWI" ["-t","BWI: <tempF>F","-L","50","-H","80","--normal","green","--high","red","--low","lightblue"] 36000
                     , Run Network "eth0" ["-L","0","-H","32","--normal","green","--high","red"] 20
                     , Run Network "wlan0" ["-L","0","-H","32","--normal","green","--high","red"] 20
                     -- , Run DiskIO [("/dev/sda5", "<total>"), ("/dev/sda6","<total>")] [] 20
                     , Run MultiCpu ["-L","25","-H","75","--low","green","--normal","yellow","--high","red"] 20
+                    , Run Thermal "THM0" ["-t","<temp>"] 50
+                    , Run Thermal "THM1" ["-t","<temp>"] 50
                     , Run Battery ["-t", "<left>"] 20
-                    , Run Memory ["-t","Mem: <usedratio>%"] 20
-                    , Run Swap [] 20
-    		        , Run Date "%a %b %_d %Y %H:%M:%S" "date" 10
+                    , Run Memory ["-t","<usedratio>%"] 20
+                    , Run Swap ["-t","<usedratio>%"] 20
+                    , Run Date "%a %b %_d %Y %H:%M:%S" "date" 10
                     , Run StdinReader
                     ]
        , sepChar = "%"
        , alignSep = "}{"
-       , template = "%StdinReader% }{ %multicpu% | %memory% * %swap% | %wlan0% - %eth0% | %battery% | <fc=#ee9a00>%date%</fc>| %KBWI%"
+       , template = "%StdinReader% }{ %multicpu% (%THM0%|%THM1%) | %battery% | %memory% * %swap% | %wlan0% | %eth0% | %KBWI% | <fc=#ee9a00>%date%</fc>"
        }
