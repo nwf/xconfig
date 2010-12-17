@@ -37,7 +37,8 @@ import Control.Monad (ap,liftM,when)
 import Control.Monad.Fix (fix)
 import Data.Bits ((.|.))
 import qualified Data.IntMap as IM
-import Data.List (isPrefixOf, stripPrefix)
+import Data.Maybe (isNothing)
+import Data.List (find, isPrefixOf, stripPrefix)
 import Data.Monoid (All(All))
 import Data.Ratio ((%))
 import System.IO (Handle, hClose, hPutStr, hPutStrLn, stderr)
@@ -63,6 +64,13 @@ replace lst@(x:xs) sub repl | sub `isPrefixOf` lst = repl ++ replace
                                                           (drop (length sub) lst) sub repl
                             | otherwise = x:(replace xs sub repl)
 replace _ _ _ = []
+
+-- | Find an empty "numeric" (tag "1" to "9") workspace.
+findEmptyNumWorkspace :: S.StackSet String l a s sd -> Maybe (S.Workspace String l a)
+findEmptyNumWorkspace = find (isNothing . S.stack)
+                      . filter (flip elem (map show [1..9]) . S.tag)
+                      . S.workspaces
+
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- XMobar management {{{
@@ -258,6 +266,10 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
         -- mod-v %! haskell prompt
     , ((modm, xK_v ), evalprompt )
+        -- mod-\ %! Switch to an unused numeric workspace, or "9" if none.
+    , ((modm, xK_backslash), windows $ \ss -> flip S.greedyView ss $
+                                 maybe ("9") S.tag
+                                     $ findEmptyNumWorkspace ss)
     ] ++ [((modm .|. m, k), windows $ f i)
           | (i, k) <- namedwksptags
           , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask)]]
