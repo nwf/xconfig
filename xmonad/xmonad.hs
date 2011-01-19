@@ -18,6 +18,7 @@ import qualified XMonad.Hooks.ManageHelpers as HMH
 import qualified XMonad.Layout as L
 import qualified XMonad.Layout.IndependentScreens as LIS
 import qualified XMonad.Layout.LayoutHints as LLH
+import qualified XMonad.Layout.PerWorkspace as LPW
 import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Prompt as P
 import qualified XMonad.Prompt.Eval as PE
@@ -64,13 +65,6 @@ replace lst@(x:xs) sub repl | sub `isPrefixOf` lst = repl ++ replace
                                                           (drop (length sub) lst) sub repl
                             | otherwise = x:(replace xs sub repl)
 replace _ _ _ = []
-
--- | Find an empty "numeric" (tag "1" to "9") workspace.
-findEmptyNumWorkspace :: S.StackSet String l a s sd -> Maybe (S.Workspace String l a)
-findEmptyNumWorkspace = find (isNothing . S.stack)
-                      . filter (flip elem (map show [1..9]) . S.tag)
-                      . S.workspaces
-
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- XMobar management {{{
@@ -154,17 +148,26 @@ togglemyxmobar = do
   toggleanxmobar (S.screen $ S.current $ cws)
 
 ----------------------------------------------------------------------- }}}
------------------------------------------------------- Named Workspaces {{{
+------------------------------------------------------------ Workspaces {{{
 
--- This list gets used inside Keyboard handling and Main, below.
--- The names on it are used inside the management hook.
---
-namedwksptags = [ ("c", xK_F1)   -- "communication"
-                , ("w", xK_F2)   -- "web"
-                , ("d", xK_F3)   -- "documents"
-                , ("m", xK_F4)   -- "media"
-                , ("p", xK_F5)   -- "presentation"
-                ]
+-- Tags for some "special" workspaces.  These are used by the manage and
+-- layout hooks below.
+wkC, wkW, wkD, wkM, wkP :: String
+wkC = "c"   -- "communication"
+wkW = "w"   -- "web"
+wkD = "d"   -- "documents"
+wkM = "m"   -- "media"
+wkP = "p"   -- "presentation"
+
+-- These lists gets used inside Keyboard handling and Main.
+privworkspaces = [wkC,wkW,wkD,wkM,wkP]
+deflworkspaces = map show [1..9]
+
+-- | Find an empty "default" ("numeric", tag "1" to "9") workspace.
+findEmptyNumWorkspace :: S.StackSet String l a s sd -> Maybe (S.Workspace String l a)
+findEmptyNumWorkspace = find (isNothing . S.stack)
+                      . filter (flip elem (deflworkspaces) . S.tag)
+                      . S.workspaces
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------- Management hook {{{
@@ -177,9 +180,9 @@ namedwksptags = [ ("c", xK_F1)   -- "communication"
 myManageHook = composeAll . concat $
     [ [ className   =? c           --> doFloat | c <- myClassFloats]
     , [ title       =? t           --> doFloat | t <- myTitleFloats]
-    , [ className   =? "Iceweasel" --> doF (S.shift "w") ]
-    , [ okularWin                  --> doF (S.shift "d") ]
-    , [ okularPresent              --> doF (S.shift "p") ]
+    , [ className   =? "Iceweasel" --> doF (S.shift wkW) ]
+    , [ okularWin                  --> doF (S.shift wkD) ]
+    , [ okularPresent              --> doF (S.shift wkP) ]
     , [ HMH.composeOne [ HMH.isFullscreen HMH.-?> HMH.doFullFloat ] ]
     -- , [ HMH.composeOne [ isKDEOverride HMH.-?> doFloat ] ]
     ]
@@ -191,6 +194,7 @@ myManageHook = composeAll . concat $
      (UW.ClassName "Okular") `UW.And` (UW.Role "okular::Shell")
    okularPresent = UW.propertyToQuery $
      (UW.ClassName "Okular") `UW.And` (UW.Role "presentationWidget")
+   -- icedlq        = UW.propertyToQuery $ UW.Role "Manager"
    myClassFloats = ["XVkbd", "Xmessage"]
    myTitleFloats = ["KCharSelect"]
 
@@ -271,11 +275,27 @@ addKeys conf@(XConfig {modMask = modm}) =
                                  maybe ("9") S.tag
                                      $ findEmptyNumWorkspace ss)
     ] ++ [((modm .|. m, k), windows $ f i)
-          | (i, k) <- namedwksptags
+          | (i, k) <-    zip privworkspaces [xK_F1..xK_F12]
+                      ++ zip deflworkspaces [xK_1 ..xK_9  ]
           , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask)]]
   where
    xsl = spawn "xscreensaver-command -lock"
    smhmdts = sendMessage HMD.ToggleStruts
+
+----------------------------------------------------------------------- }}}
+----------------------------------------------------------- Layout Hook {{{
+
+myLayoutHook =
+    HMD.avoidStruts                           -- everybody avoids struts
+  . LLH.layoutHintsWithPlacement (0.5, 0.5)   -- and obeys hinting
+  $ LPW.onWorkspace wkP L.Full                -- presentations always full
+  $ LPW.onWorkspaces [wkW, wkD] defaultFull   -- web and docs default full
+  $ defaultResizeTall                         -- else, default tall
+ where
+  defaultResizeTall = lrt ||| lmt ||| L.Full
+  defaultFull = L.Full ||| lrt ||| lmt
+  lrt = LRT.ResizableTall 1 (3/100) (1/2) []
+  lmt = L.Mirror (L.Tall 1 (3/100) (1/2))
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------------ Main {{{
@@ -306,7 +326,7 @@ main = do
   xmonad $ customKeys defaultConfig
       { modMask = mod4Mask
       , terminal = "urxvtcd"
-      , workspaces = workspaces defaultConfig ++ map fst namedwksptags
+      , workspaces = privworkspaces ++ deflworkspaces
       , shutdownHook = do
             -- io $ signalProcess keyboardSignal trayp
             killxmobars
@@ -324,10 +344,7 @@ main = do
                    , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 40
                    , HDL.ppLayout = \s -> maybe s id $ stripPrefix "Hinted " s
                    }
-      , layoutHook = HMD.avoidStruts . LLH.layoutHintsWithPlacement (0.5, 0.5)
-                           $ LRT.ResizableTall 1 (3/100) (1/2) []
-                         ||| L.Mirror (L.Tall 1 (3/100) (1/2))
-                         ||| L.Full
+      , layoutHook = myLayoutHook
       , handleEventHook = myEventHook
       }
  where
