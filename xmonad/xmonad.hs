@@ -19,6 +19,7 @@ import qualified XMonad.Hooks.ManageHelpers as HMH
 import qualified XMonad.Layout as L
 import qualified XMonad.Layout.IndependentScreens as LIS
 import qualified XMonad.Layout.LayoutHints as LLH
+import qualified XMonad.Layout.MultiColumns as LMC
 import qualified XMonad.Layout.PerWorkspace as LPW
 import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Layout.SLS as LS 
