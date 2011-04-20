@@ -20,6 +20,7 @@ import qualified XMonad.Layout.IndependentScreens as LIS
 import qualified XMonad.Layout.LayoutHints as LLH
 import qualified XMonad.Layout.PerWorkspace as LPW
 import qualified XMonad.Layout.ResizableTile as LRT
+import qualified XMonad.Layout.SLS as LS 
 import qualified XMonad.Prompt as P
 import qualified XMonad.Prompt.Eval as PE
 import qualified XMonad.Prompt.Input as PI
@@ -292,10 +293,14 @@ myLayoutHook =
   $ LPW.onWorkspaces [wkW, wkD] defaultFull   -- web and docs default full
   $ defaultResizeTall                         -- else, default tall
  where
-  defaultResizeTall = lrt ||| lmt ||| L.Full
+  defaultResizeTall = lrt ||| lmt ||| L.Full ||| wsslslrt
   defaultFull = L.Full ||| lrt ||| lmt
-  lrt = LRT.ResizableTall 1 (3/100) (1/2) []
+
   lmt = L.Mirror (L.Tall 1 (3/100) (1/2))
+  wsslslrt = LS.mksls 1600 lrt lmc
+  lmc = LMC.multiCol [1] 2 0.01 (-0.33)
+  lrt = LRT.ResizableTall 1 (3/100) (1/2) []
+
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------------ Main {{{
