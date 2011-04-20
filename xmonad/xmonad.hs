@@ -253,11 +253,11 @@ addKeys conf@(XConfig {modMask = modm}) =
         -- mod-B %! Toggle xmobar
     , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
         -- mod-f %! Pull up Bring menu
-    , ((modm, xK_f    ), PW.windowPromptBring P.defaultXPConfig)
+    , ((modm, xK_f    ), PW.windowPromptBring P.amberXPConfig)
         -- mod-g %! Pull up Goto menu
-    , ((modm, xK_g    ), PW.windowPromptGoto  P.defaultXPConfig)
+    , ((modm, xK_g    ), PW.windowPromptGoto  P.amberXPConfig)
         -- mod-G %! Pull up Goto menu filtered for active workspace
-    , ((modm .|. shiftMask, xK_g    ), PW.windowPromptGotoCurrent  P.defaultXPConfig)
+    , ((modm .|. shiftMask, xK_g    ), PW.windowPromptGotoCurrent  P.amberXPConfig)
         -- mod-T %! Sink everything on the current desktop
     , ((modm .|. shiftMask, xK_t), AWA.sinkAll)
         -- mod-o %! Pull up chraracter selector
