@@ -7,6 +7,7 @@
 
 import           XMonad
 import qualified XMonad.Core as C
+import qualified XMonad.Actions.CopyWindow as CW
 import qualified XMonad.Actions.CycleWS as CWS
 import qualified XMonad.Actions.DynamicWorkspaces as ADW
 import qualified XMonad.Actions.Eval as AE
@@ -250,6 +251,8 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm, xK_a    ), AW.warpToWindow (1%10) (1%10))
         -- mod-b %! Toggle Struts
     , ((modm, xK_b), smhmdts)
+        -- mod-shift-c %! Use CW.kill1 by default.
+    , ((modm .|. shiftMask, xK_c     ), CW.kill1)
         -- mod-B %! Toggle xmobar
     , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
         -- mod-f %! Pull up Bring menu
@@ -275,10 +278,11 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm, xK_backslash), windows $ \ss -> flip S.greedyView ss $
                                  maybe ("9") S.tag
                                      $ findEmptyNumWorkspace ss)
+        -- mod-{F1-F12,1-9}
     ] ++ [((modm .|. m, k), windows $ f i)
           | (i, k) <-    zip privworkspaces [xK_F1..xK_F12]
                       ++ zip deflworkspaces [xK_1 ..xK_9  ]
-          , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask)]]
+          , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask), (CW.copy, shiftMask .|. controlMask)]]
   where
    xsl = spawn "xscreensaver-command -lock"
    smhmdts = sendMessage HMD.ToggleStruts
