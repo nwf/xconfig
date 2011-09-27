@@ -1,19 +1,26 @@
 --------------------------------------------------------------- Headers {{{
 
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE EmptyDataDecls #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DoRec #-}
+{-# LANGUAGE EmptyDataDecls #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 import           XMonad
-import qualified XMonad.Core as C
+-- import qualified XMonad.Core as C
 import qualified XMonad.Actions.CopyWindow as CW
 import qualified XMonad.Actions.CycleWS as CWS
-import qualified XMonad.Actions.DynamicWorkspaces as ADW
+-- import qualified XMonad.Actions.DynamicWorkspaces as ADW
 import qualified XMonad.Actions.Eval as AE
+import qualified XMonad.Actions.Submap as AS
 import qualified XMonad.Actions.Warp as AW
 import qualified XMonad.Actions.WithAll as AWA
-import qualified XMonad.Hooks.DynamicLog as HDL
+import qualified XMonad.Actions.XMobars as AXB
 import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
 import qualified XMonad.Layout as L
@@ -25,34 +32,29 @@ import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Layout.SLS as LS 
 import qualified XMonad.Prompt as P
 import qualified XMonad.Prompt.Eval as PE
-import qualified XMonad.Prompt.Input as PI
+-- import qualified XMonad.Prompt.Input as PI
 import qualified XMonad.Prompt.Window as PW
 import qualified XMonad.StackSet as S
 import qualified XMonad.Util.Cursor as UC
 import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.EZConfig as EZC
-import qualified XMonad.Util.Run as UR
 import qualified XMonad.Util.WindowProperties as UW
 
-import Control.Concurrent (forkOS)
-import Control.Concurrent.MVar
-import Control.Exception (try, SomeException)
-import Control.Monad (ap,liftM,when)
-import Control.Monad.Fix (fix)
-import Data.Bits ((.|.))
-import qualified Data.IntMap as IM
+import Control.Monad (ap,liftM2,when)
 import Data.Maybe (isNothing)
+import qualified Data.Map as M
 import Data.List (find, isPrefixOf, stripPrefix)
-import Data.Monoid (All(All))
+import Data.Monoid (All(All),mappend)
 import Data.Ratio ((%))
-import System.IO (Handle, hClose, hPutStr, hPutStrLn, stderr)
-import System.Posix.Process (executeFile, getProcessStatus, ProcessStatus(..), getProcessID)
+-- import qualified Language.Haskell.TH as TH
+-- import System.FilePath ((</>))
+import System.IO (hPutStrLn, stderr)
+-- import System.Posix.Directory (getWorkingDirectory)
+-- import System.Posix.Process (getProcessStatus, ProcessStatus(..))
 import System.Posix.Signals (signalProcess, keyboardSignal)
 import System.Posix.Types (ProcessID)
 
-import Graphics.X11.Xinerama (getScreenInfo)
-
-type Key = (KeyMask, KeySym)
+-- import Graphics.X11.Xinerama (getScreenInfo)
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Utility functions {{{
@@ -65,90 +67,17 @@ killpid = io . signalProcess keyboardSignal
 -- Stolen from Actions.Eval
 replace :: Eq a => [a] -> [a] -> [a] -> [a]
 replace lst@(x:xs) sub repl | sub `isPrefixOf` lst = repl ++ replace
-                                                          (drop (length sub) lst) sub repl
+                                                     (drop (length sub) lst) sub repl
                             | otherwise = x:(replace xs sub repl)
 replace _ _ _ = []
 
------------------------------------------------------------------------ }}}
------------------------------------------------------ XMobar management {{{
-
--- XXX This is not ideal; there should be a pure map of the user's intent
--- and an impure map of the state of the child processes (and the user's
--- intent).  That would let us persist the user's intent across restart.
-
-data XMobars = XMobars (IM.IntMap (MVar (Maybe (Handle, ProcessID))))
-    deriving Typeable
-instance ExtensionClass XMobars where initialValue = XMobars IM.empty
-
-spawnxmobar ix vv = do
-   -- io $ hPutStrLn stderr $ "spawnanxmobar " ++ (show ix)
-   v <- liftM Just . UR.spawnPipePid $
-                    "exec xmobar -x " ++ (show ix) ++ " " ++ "$HOME/lib/X/xmobarrc"
-   () <- io $ putMVar vv v
-   case v of
-      Nothing -> return () -- no point in waiting
-      Just (_,pid) -> waitxmobardeath vv pid >> return ()
-   return (ix, vv)
- where
-  waitxmobardeath mv pid = io $ forkOS $ fix $ \f -> do
-    r <- try $ getProcessStatus True False pid
-    -- io $ hPutStrLn stderr $ "waitxmobardeth " ++ (show ix) ++ " (" ++ (show pid) ++ ")"
-    case r of
-        Left (_ :: SomeException)   -> done
-        Right (Nothing)             -> done
-        Right (Just (Exited _))     -> done
-        Right (Just (Terminated _)) -> done
-        Right (Just (Stopped _))    -> f
-   where
-     done = do
-       o <- takeMVar mv
-       case o of
-         Just (_,p') | p' == pid -> putMVar mv Nothing
-         _  -> putMVar mv o
-
-killxmobars_ xs = do
-  io $ mapM_ (\x -> takeMVar x
-                    >>= maybe (return ()) (killpid . snd)
-                    >> putMVar x Nothing)
-             xs
-
-respawnxmobars :: X ()
-respawnxmobars = do
-  screencount <- LIS.countScreens
-  XMobars cxmbars <- UE.get
-  let (stay, mkill, kills) = IM.splitLookup screencount cxmbars
-  -- io $ hPutStrLn stderr $ "respawnxmobars " ++ (show screencount) ++ " " ++ (show $ IM.keys stay)
-  killxmobars_ $ maybe (id) (:) mkill (IM.elems kills)
-  new <- if (IM.size stay /= screencount)
-   then do spawned <- mapM (\ix -> io $ newEmptyMVar >>= spawnxmobar ix)
-                [(IM.size stay)..(screencount-1)]
-           return $ IM.union stay (IM.fromList spawned)
-   else return stay
-  UE.put $ XMobars new
-  -- XMobars cxmbars <- UE.get
-  -- io $ hPutStrLn stderr $ "respawnxmobars end " ++ (show screencount) ++ " " ++ (show $ IM.keys cxmbars)
-
-killxmobars :: X ()
-killxmobars = do
-  (XMobars old) <- UE.get
-  killxmobars_ (IM.elems old)
-
-toggleanxmobar :: ScreenId -> X ()
-toggleanxmobar (S scr) = do
-  -- io $ hPutStrLn stderr $ "toggleanxmobar " ++ (show scr)
-  XMobars cxmbars <- UE.get
-  case IM.lookup scr cxmbars of
-    Just mxv -> do
-        mx <- io $ takeMVar mxv
-        case mx of
-            Nothing -> spawnxmobar scr mxv >> return ()
-            Just (_,p) -> killpid p >> io (putMVar mxv Nothing)
-    Nothing -> return ()
-
-togglemyxmobar :: X ()
-togglemyxmobar = do
-  cws <- gets windowset
-  toggleanxmobar (S.screen $ S.current $ cws)
+-- | Find the screen which is displaying a given workspace tag
+findScreenByTag :: WorkspaceId
+                -> X (Maybe
+                       (S.Screen WorkspaceId (Layout Window)
+                                 Window ScreenId ScreenDetail))
+findScreenByTag i = gets (S.screens . windowset) 
+                  >>= return . find ((== i) . (S.tag . S.workspace))
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------ Workspaces {{{
@@ -162,14 +91,18 @@ wkD = "d"   -- "documents"
 wkM = "m"   -- "media"
 wkP = "p"   -- "presentation"
 
--- These lists gets used inside Keyboard handling and Main.
+-- These lists get used inside Keyboard handling and Main.
+privworkspaces,deflworkspaces :: [String]
 privworkspaces = [wkC,wkW,wkD,wkM,wkP]
-deflworkspaces = map show [1..9]
+deflworkspaces = map show [(1::Int)..9]
+addlworkspaces = map (("A" ++) . show) [(1::Int)..9]
 
--- | Find an empty "default" ("numeric", tag "1" to "9") workspace.
-findEmptyNumWorkspace :: S.StackSet String l a s sd -> Maybe (S.Workspace String l a)
+-- | Find an empty "default" or "additional" workspace.
+findEmptyNumWorkspace :: S.StackSet String l a s sd
+                      -> Maybe (S.Workspace String l a)
 findEmptyNumWorkspace = find (isNothing . S.stack)
-                      . filter (flip elem (deflworkspaces) . S.tag)
+                      . filter (flip elem (deflworkspaces
+                                        ++ addlworkspaces) . S.tag)
                       . S.workspaces
 
 ----------------------------------------------------------------------- }}}
@@ -180,10 +113,12 @@ findEmptyNumWorkspace = find (isNothing . S.stack)
 --    isfs <- HMH.isFullscreen
 --    return $! isover && (not isfs)
 
+myManageHook :: ManageHook
 myManageHook = composeAll . concat $
     [ [ className   =? c           --> doFloat | c <- myClassFloats]
     , [ title       =? t           --> doFloat | t <- myTitleFloats]
     , [ className   =? "Iceweasel" --> doF (S.shift wkW) ]
+    , [ className   =? "Chromium"  --> doF (S.shift wkW) ]
     , [ okularWin                  --> doF (S.shift wkD) ]
     , [ okularPresent              --> doF (S.shift wkP) ]
     , [ HMH.composeOne [ HMH.isFullscreen HMH.-?> HMH.doFullFloat ] ]
@@ -202,45 +137,52 @@ myManageHook = composeAll . concat $
    myTitleFloats = ["KCharSelect"]
 
 ----------------------------------------------------------------------- }}}
------------------------------------------------------------- Event hook {{{
-
-myEventHook :: Event -> X All
-myEventHook (ConfigureEvent {ev_window = w}) = do
-    whenX (isRoot w) respawnxmobars
-    return (All True)
-myEventHook _ = return (All True)
-
------------------------------------------------------------------------ }}}
 --------------------------------------------- Action.Eval configuration {{{
 
 myEvalConfig :: AE.EvalConfig
-myEvalConfig = AE.defaultEvalConfig {AE.imports = [("Prelude",Nothing)
-                                                  ,("Data.Map",Just "M")
-                                                  ,("System.IO",Nothing)
-                                                  -- ,("System.Posix.IO",Nothing)
-                                                  -- ,("System.Posix.Types",Nothing)
-                                                  ,("XMonad",Nothing)
-                                                  ,("XMonad.Core",Nothing)
-                                                  ,("XMonad.StackSet",Just "S")
-                                                  ,("XMonad.Util.ExtensibleState",Just "UE")
-                                                  ]
-                                    ,AE.handleError = \err ->
-                                        return $ "Error: " ++ replace (show err) "\\n" "\n"
-                                    }
+myEvalConfig = AE.defaultEvalConfig
+             { AE.imports = [("Prelude",Nothing)
+                            ,("System.IO",Nothing)
+                            ,("XMonad",Nothing)
+                            ,("XMonad.Core",Nothing)
+                            ,("XMonad.Util.ExtensibleState", Just "UE")
+                            -- ,("System.Posix.IO",Nothing)
+                            -- ,("System.Posix.Types",Nothing)
+                            ]
+             , AE.handleError = \err ->
+                 return $ "Error: " ++ (show err)
+             }
+{-
+  where
+   self = $(do
+             cwd <- TH.runIO $ getWorkingDirectory
+             lfn <- liftM TH.loc_filename TH.location
+             return . TH.LitE . TH.StringL $ cwd </> lfn)
+-}
 
+evalprompt :: X ()
 evalprompt = do
     a <- asks (messageHook.config) 
-    PE.evalPromptWithOutput myEvalConfig P.defaultXPConfig $
-        \r -> when (not $ r `elem` ["()",""]) (a r)
+    -- xmd <- getXMonadDir
+    PE.evalPromptWithOutput myEvalConfig
+        P.amberXPConfig $
+       \r -> when (not $ r `elem` ["()",""]) (a $ replace r "\\n" "\n")
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Keyboard handling {{{
 
+type Key = (KeyMask, KeySym)
+
 delKeys :: XConfig l -> [Key]
-delKeys conf@(XConfig {modMask = modm}) = []
+delKeys (XConfig {modMask = modm}) =
+    [
+        -- mod-q %! Remove this; I almost invariably end up hitting it by
+        -- mistake and doing my xmonad restarts from the CLI
+        (modm, xK_q)
+    ]
 
 addKeys :: XConfig l -> [(Key, X ())]
-addKeys conf@(XConfig {modMask = modm}) =
+addKeys (XConfig {modMask = modm}) =
     [
         -- mod-0 %! Toggle to the workspace displayed previously
       ((modm, xK_0    ), CWS.toggleWS)
@@ -255,7 +197,7 @@ addKeys conf@(XConfig {modMask = modm}) =
         -- mod-shift-c %! Use CW.kill1 by default.
     , ((modm .|. shiftMask, xK_c     ), CW.kill1)
         -- mod-B %! Toggle xmobar
-    , ((modm .|. shiftMask, xK_b ), togglemyxmobar )
+    , ((modm .|. shiftMask, xK_b ), AXB.togglemyxmobar )
         -- mod-f %! Pull up Bring menu
     , ((modm, xK_f    ), PW.windowPromptBring P.amberXPConfig)
         -- mod-g %! Pull up Goto menu
@@ -264,8 +206,6 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm .|. shiftMask, xK_g    ), PW.windowPromptGotoCurrent  P.amberXPConfig)
         -- mod-T %! Sink everything on the current desktop
     , ((modm .|. shiftMask, xK_t), AWA.sinkAll)
-        -- mod-o %! Pull up chraracter selector
-    , ((modm .|. shiftMask, xK_o    ), spawn "kcharselect")
         -- XF86ScreenSaver %! Lock the screen
         -- mod-x %! Lock the screen
     , ((0, 0x1008ff2d ), xsl)
@@ -275,25 +215,48 @@ addKeys conf@(XConfig {modMask = modm}) =
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
         -- mod-v %! haskell prompt
     , ((modm, xK_v ), evalprompt )
+        -- mod-z %! some utility commands squirreled away behind a submap
+    , ((modm, xK_z ), AS.submap . M.fromList $
+        [ ((0, xK_b), spawn "blueman-manager")
+        , ((0, xK_c), spawn "kcharselect")
+        , ((0, xK_d), togglevga)
+        , ((0, xK_f), spawn "firefox --no-remote -P default")
+        , ((shiftMask, xK_f), spawn "firefox --no-remote -P Flash")
+        , ((0, xK_g), spawn "chromium")
+        , ((0, xK_r), spawn "gmrun")
+        , ((0, xK_w), asks (terminal . config) >>= \t -> spawn $ t ++ " -e wicd-curses")
+        ])
         -- mod-\ %! Switch to an unused numeric workspace, or "9" if none.
     , ((modm, xK_backslash), windows $ \ss -> flip S.greedyView ss $
                                  maybe ("9") S.tag
                                      $ findEmptyNumWorkspace ss)
+        -- mod-`
+    -- , ((modm, xK_quoteleft), return ())
         -- mod-{F1-F12,1-9}
-    ] ++ [((modm .|. m, k), windows $ f i)
-          | (i, k) <-    zip privworkspaces [xK_F1..xK_F12]
-                      ++ zip deflworkspaces [xK_1 ..xK_9  ]
-          , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask), (CW.copy, shiftMask .|. controlMask)]]
+    ] ++ [((modm .|. m .|. m', k), windows $ f i)
+          | (i, (k, m')) <-
+                zip privworkspaces (map (,0)        [xK_F1..xK_F12])
+             ++ zip deflworkspaces (map (,0)        [xK_1 ..xK_9  ])
+             ++ zip addlworkspaces (map (,mod1Mask) [xK_1 ..xK_9  ])
+          , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask)
+                      ,(CW.copy, shiftMask .|. controlMask)]
+                      ]
   where
    xsl = spawn "xscreensaver-command -lock"
    smhmdts = sendMessage HMD.ToggleStruts
+
+   togglevga = do
+     screencount <- LIS.countScreens
+     if screencount > 1
+      then spawn "xrandr --output VGA1 --off"
+      else spawn "xrandr --output VGA1 --auto --right-of LVDS1"
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------------- Layout Hook {{{
 
 myLayoutHook =
-    HMD.avoidStruts                           -- everybody avoids struts
-  . LLH.layoutHintsWithPlacement (0.5, 0.5)   -- and obeys hinting
+    LLH.layoutHintsWithPlacement (0.5, 0.5)   -- everybody obeys hinting
+  . HMD.avoidStruts                           -- everybody avoids struts
   $ LPW.onWorkspace wkP L.Full                -- presentations always full
   $ LPW.onWorkspaces [wkW, wkD] defaultFull   -- web and docs default full
   $ defaultResizeTall                         -- else, default tall
@@ -310,6 +273,7 @@ myLayoutHook =
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------------ Main {{{
 
+main :: IO ()
 main = do
     -- Spawn these here so that the right thing happens when we restart
     -- xmonad after changing the number of displays.  Note that we grab
@@ -336,35 +300,38 @@ main = do
   xmonad $ customKeys defaultConfig
       { modMask = mod4Mask
       , terminal = "urxvtcd"
-      , workspaces = privworkspaces ++ deflworkspaces
+      , workspaces = privworkspaces ++ deflworkspaces ++ addlworkspaces
       , shutdownHook = do
             -- io $ signalProcess keyboardSignal trayp
-            killxmobars
+            AXB.killxmobars
+            return ()
       , startupHook = do
             UC.setDefaultCursor UC.xC_left_ptr
-            respawnxmobars
+            AXB.ensureanxmobar (S 0) "$HOME/lib/X/xmobarrc"
+            AXB.updatexmobars
       , manageHook = manageHook defaultConfig <+> HMD.manageDocks <+> myManageHook
-      , logHook = do
-           XMobars cxmbars <- UE.get
-           HDL.dynamicLogWithPP $ HDL.xmobarPP
-                   { HDL.ppOutput = \o ->
-                       mapM_ (\x -> readMVar x >>= maybe (return ())
-                                    (\(h,_) -> hPutStrLn h o))
-                             (IM.elems cxmbars)
-                   , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 40
-                   , HDL.ppLayout = \s -> maybe s id $ stripPrefix "Hinted " s
-                   }
+      , logHook = AXB.xmobarLH
       , layoutHook = myLayoutHook
-      , handleEventHook = myEventHook
+      , handleEventHook = AXB.xmobarEH
+        -- liftM2 mappend AXB.xmobarEH (return . const (All True))
       }
  where
     customKeys = (EZC.additionalKeys `ap` addKeys)
              . (EZC.removeKeys `ap` delKeys)
 
+{-
+main = xmonad defaultConfig
+    { startupHook = AE.evalExpressionWithReturn
+                        (myEvalConfig {AE.modules = ["xmonad.hs"]})
+                        "broadcastMessage (LS.SS (Just \"1\") Nothing)"
+                    >>= io . putStrLn . show
+    , layoutHook = mksls "foo" Nothing L.Full L.Full
+    }
+-}
+
 ----------------------------------------------------------------------- }}}
 
 -- TODO
--- XMobar fixes (pure maps, multiple configurations)
 -- Urgency hooks
 
 -- VIM modeline, huzzah
