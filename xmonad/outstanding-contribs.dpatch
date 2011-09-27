@@ -1,7 +1,4 @@
-4 patches for repository http://code.haskell.org/XMonadContrib:
-
-Tue Sep 28 17:46:25 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Add spawnPipePid
+5 patches for repository http://code.haskell.org/XMonadContrib:
 
 Thu Oct 21 01:40:12 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Support for filters in XMonad.Prompt.Window
@@ -12,47 +9,14 @@ Wed Nov  3 15:55:05 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
 Wed Nov  3 15:55:18 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Use messageHook in Util.NamedActions
 
+Tue Apr 12 01:07:54 EDT 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Add spawnPipePid
+
+Tue Sep 27 18:20:53 EDT 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Add ppOverride to Hooks.DynamicLog
+
 New patches:
 
-[Add spawnPipePid
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20100928214625
- Ignore-this: 93aed7345294a46e16b2f2c95e812c82
-] {
-hunk ./XMonad/Util/Run.hs 29
-                           runInTerm,
-                           safeRunInTerm,
-                           seconds,
-+                          spawnPipePid,
-                           spawnPipe,
- 
-                           hPutStr, hPutStrLn  -- re-export for convenience
-hunk ./XMonad/Util/Run.hs 136
- safeRunInTerm :: String -> String -> X ()
- safeRunInTerm options command = asks (terminal . config) >>= \t -> safeSpawn t [options, " -e " ++ command]
- 
---- | Launch an external application through the system shell and return a @Handle@ to its standard input.
--spawnPipe :: MonadIO m => String -> m Handle
--spawnPipe x = io $ do
-+spawnPipePid :: MonadIO m => String -> m (Handle, ProcessID)
-+spawnPipePid x = io $ do
-     (rd, wr) <- createPipe
-     setFdOption wr CloseOnExec True
-     h <- fdToHandle wr
-hunk ./XMonad/Util/Run.hs 142
-     hSetBuffering h LineBuffering
--    xfork $ do
-+    pid <- xfork $ do
-         dupTo rd stdInput
-         executeFile "/bin/sh" False ["-c", x] Nothing
-     closeFd rd
-hunk ./XMonad/Util/Run.hs 146
--    return h
-+    return (h, pid)
-+
-+-- | Launch an external application through the system shell and return a @Handle@ to its standard input.
-+spawnPipe :: MonadIO m => String -> m Handle
-+spawnPipe = liftM fst . spawnPipePid
-}
 [Support for filters in XMonad.Prompt.Window
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101021054012
  Ignore-this: 38ec7cdfc39c2dfefd64f6aae7177551
@@ -135,7 +99,7 @@ hunk ./XMonad/Prompt/Window.hs 107
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103195505
  Ignore-this: 1e564495fbcecd3d1444f21d98183c25
 ] {
-hunk ./XMonad/Util/EZConfig.hs 704
+hunk ./XMonad/Util/EZConfig.hs 706
  checkKeymap :: XConfig l -> [(String, a)] -> X ()
  checkKeymap conf km = warn (doKeymapCheck conf km)
    where warn ([],[])   = return ()
@@ -144,7 +108,7 @@ hunk ./XMonad/Util/EZConfig.hs 704
 +                         mh <- asks (messageHook.config)
 +                         mh $ "Warning:\n"
                              ++ msg "bad" bad ++ "\n"
-hunk ./XMonad/Util/EZConfig.hs 708
+hunk ./XMonad/Util/EZConfig.hs 710
 -                            ++ msg "duplicate" dup ++ "'"
 +                            ++ msg "duplicate" dup
          msg _ [] = ""
@@ -176,9 +140,477 @@ hunk ./XMonad/Util/NamedActions.hs 203
  
  -- | Merge the supplied keys with 'defaultKeysDescr', also adding a keybinding
 }
+[Add spawnPipePid
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20110412050754
+ Ignore-this: f91b0c8bb2fde2ec5dddd86b169d9b74
+] {
+hunk ./XMonad/Util/Run.hs 29
+                           runInTerm,
+                           safeRunInTerm,
+                           seconds,
++                          spawnPipePid,
+                           spawnPipe,
+ 
+                           hPutStr, hPutStrLn  -- re-export for convenience
+hunk ./XMonad/Util/Run.hs 37
+ 
+ import System.Posix.IO
+ import System.Posix.Process (createSession, executeFile, forkProcess)
++import System.Posix.Types (ProcessID)
+ import Control.Concurrent (threadDelay)
+ import System.IO
+ import System.Process (runInteractiveProcess)
+hunk ./XMonad/Util/Run.hs 137
+ safeRunInTerm :: String -> String -> X ()
+ safeRunInTerm options command = asks (terminal . config) >>= \t -> safeSpawn t [options, " -e " ++ command]
+ 
+--- | Launch an external application through the system shell and return a @Handle@ to its standard input.
+-spawnPipe :: MonadIO m => String -> m Handle
+-spawnPipe x = io $ do
++spawnPipePid :: MonadIO m => String -> m (Handle, ProcessID)
++spawnPipePid x = io $ do
+     (rd, wr) <- createPipe
+     setFdOption wr CloseOnExec True
+     h <- fdToHandle wr
+hunk ./XMonad/Util/Run.hs 143
+     hSetBuffering h LineBuffering
+-    _ <- xfork $ do
+-          _ <- dupTo rd stdInput
+-          executeFile "/bin/sh" False ["-c", x] Nothing
++    pid <- xfork $ do
++        dupTo rd stdInput
++        executeFile "/bin/sh" False ["-c", x] Nothing
+     closeFd rd
+hunk ./XMonad/Util/Run.hs 147
+-    return h
++    return (h, pid)
++
++-- | Launch an external application through the system shell and return a @Handle@ to its standard input.
++spawnPipe :: MonadIO m => String -> m Handle
++spawnPipe = liftM fst . spawnPipePid
+}
+[Add ppOverride to Hooks.DynamicLog
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20110927222053
+ Ignore-this: ab1a39c1c1ad87692c81e824dac8cae6
+] {
+hunk ./XMonad/Actions/TopicSpace.hs 257
+         add_depth proj topic = proj pp . (((topic++":")++) . show) . depth $ topic
+         pp' = pp { ppHidden = add_depth ppHidden, ppVisible = add_depth ppVisible }
+         sortWindows = take maxDepth . sortBy (comparing $ depth . W.tag)
+-    return $ DL.pprWindowSet sortWindows urgents pp' winset
++    DL.pprWindowSet sortWindows urgents pp' winset
+ 
+ -- | Given a prompt configuration and a topic configuration, triggers the action associated with
+ -- the topic given in prompt.
+hunk ./XMonad/Hooks/DynamicLog.hs 60
+ -- Useful imports
+ 
+ import Codec.Binary.UTF8.String (encodeString)
+-import Control.Monad (liftM2)
++import Control.Monad (liftM, liftM2)
+ import Data.Char ( isSpace, ord )
+ import Data.List (intersperse, isPrefixOf, sortBy)
+ import Data.Maybe ( isJust, catMaybes )
+hunk ./XMonad/Hooks/DynamicLog.hs 271
+     let ld = description . S.layout . S.workspace . S.current $ winset
+ 
+     -- workspace list
+-    let ws = pprWindowSet sort' urgents pp winset
++    ws <- pprWindowSet sort' urgents pp winset
+ 
+     -- window title
+     wt <- maybe (return "") (fmap show . getName) . S.peek $ winset
+hunk ./XMonad/Hooks/DynamicLog.hs 289
+ -- | Format the workspace information, given a workspace sorting function,
+ --   a list of urgent windows, a pretty-printer format, and the current
+ --   WindowSet.
+-pprWindowSet :: WorkspaceSort -> [Window] -> PP -> WindowSet -> String
+-pprWindowSet sort' urgents pp s = sepBy (ppWsSep pp) . map fmt . sort' $
++pprWindowSet :: WorkspaceSort -> [Window] -> PP -> WindowSet -> X String
++pprWindowSet sort' urgents pp s = liftM (sepBy (ppWsSep pp))
++                                   . mapM fmt . sort' $
+             map S.workspace (S.current s : S.visible s) ++ S.hidden s
+    where this     = S.currentTag s
+          visibles = map (S.tag . S.workspace) (S.visible s)
+hunk ./XMonad/Hooks/DynamicLog.hs 296
+ 
+-         fmt w = printer pp (S.tag w)
++         fmt w = do
++             movrd <- ppOverride pp w
++             return $ maybe (printer pp (S.tag w)) (id) movrd
+           where printer | any (\x -> maybe False (== S.tag w) (S.findTag x s)) urgents  = ppUrgent
+                         | S.tag w == this                                               = ppCurrent
+                         | S.tag w `elem` visibles                                       = ppVisible
+hunk ./XMonad/Hooks/DynamicLog.hs 426
+                -- ^ how to print tags of empty hidden workspaces
+              , ppUrgent :: WorkspaceId -> String
+                -- ^ format to be applied to tags of urgent workspaces.
++             , ppOverride :: WindowSpace -> X (Maybe String)
++               -- ^ an optional override for formating of workspaces
+              , ppSep :: String
+                -- ^ separator to use between different log sections
+                -- (window name, layout, workspaces)
+hunk ./XMonad/Hooks/DynamicLog.hs 473
+                , ppHidden          = id
+                , ppHiddenNoWindows = const ""
+                , ppUrgent          = id
++               , ppOverride        = \_ -> return Nothing
+                , ppSep             = " : "
+                , ppWsSep           = " "
+                , ppTitle           = shorten 80
+}
 
 Context:
 
+[Add XF86TouchpadToggle to the list of multimedia keys in X.U.EZConfig
+Daniel Schoepe <daniel.schoepe@googlemail.com>**20110917151419
+ Ignore-this: 84986d5b16c54199a589ed68842f5191
+] 
+[documentation patch to XMonad.Doc.Extending
+Daniel Wagner <daniel@wagner-home.com>**20110916202845
+ Ignore-this: 77998915c337590f127fd4a4b6029029
+] 
+[fix warnings in X.U.EZConfig
+Brent Yorgey <byorgey@cis.upenn.edu>**20110908133246
+ Ignore-this: 5322d61eaf30b13e68a5674f8ac7084d
+] 
+[X.A.CycleWS Refactor and add toggleWS' that excludes listed tags
+Wirt Wolff <wirtwolff@gmail.com>**20110907232730
+ Ignore-this: bec03fcb6aa16452d3a0425d156823a4
+] 
+[X.A.FlexibleManipulate: Set expected fixities for Pnt math operators
+Wirt Wolff <wirtwolff@gmail.com>**20110904221247
+ Ignore-this: 9ae239c4120eae866983ecfe5cc59894
+ Restores broken mouseWindow discrete linear and resize to 0.9.1 behavior
+] 
+[GHC 7 compat
+Daniel Wagner <daniel@wagner-home.com>**20110731170850
+ Ignore-this: 17a43a709e70ebccc925e016d7057399
+ 
+ * true error: more modules export foldl/foldl'/foldr, so explicitly use the Data.Foldable one
+ * -Werror error: transition from Control.OldException to Control.Exception, assuming everything was IOException
+ 
+] 
+[Correct H.DynamicLog.dynamicLogXinerama comment. Wuzzeb's patch at issue 466.
+Adam Vogt <vogt.adam@gmail.com>**20110714231741
+ Ignore-this: 8434fe4c740fc06b5b17f016e28e0376
+ 
+ Slight changes to the patch to 1. work with haddock, and 2. remove ppOutput
+ which distracts from the formatting and is covered elsewhere.
+] 
+[ungrab-keyboard-before-action
+Ben Boeckel <mathstuf@gmail.com>**20110515210312
+ Ignore-this: 5b8f3c286e8231a4d7ade2acbb2ae84a
+ 
+ If an action that requires the keyboard to be grabbed (e.g., launching dmenu),
+ it is a race when submapping the action as to whether the action will have
+ access to the keyboard or not. To fix this, the keyboard should be ungrabbed
+ before executing the action.
+] 
+[add-movenext-moveprev-bindings
+Ben Boeckel <mathstuf@gmail.com>**20110515193326
+ Ignore-this: 2ad1ce1de0c2954b2946551dd62e6b3b
+ 
+ Adds default bindings to GridSelect for the moveNext and movePrev motions.
+] 
+[X.L.LayoutHints: refresh only if hints are not satisfied
+Tomas Janousek <tomi@nomi.cz>**20110615150333
+ Ignore-this: e081f5fbd6a721e260212548d830ff6b
+] 
+[L.Spacing use imported fi
+Adam Vogt <vogt.adam@gmail.com>**20110612192339
+ Ignore-this: ac3b405e8c43d1b1db58ecf80fafab8e
+] 
+[Use a phantom type instead of undefined in L.LayoutBuilderP
+Adam Vogt <vogt.adam@gmail.com>**20110609051858
+ Ignore-this: f9009c339ac20245ca0b1dc8154b673f
+ 
+ This better expresses the idea that the argument to alwaysTrue is just there to
+ select an instance. Another option could be to do use a fundep, which seems to
+ be compatible with the two instances so far.
+ 
+ class Predicate p w | p -> w
+ 
+] 
+[Add more L.LayoutBuilderP documentation
+Adam Vogt <vogt.adam@gmail.com>**20110609050922
+ Ignore-this: 1441d917c84b165f30711e572e239392
+] 
+[Correct L.LayoutBuilderP module name in haddock.
+Adam Vogt <vogt.adam@gmail.com>**20110609043940
+ Ignore-this: 3c322c0767969fa42b1e2c32cf3f8a1a
+] 
+[Cleanup in X.L.LayoutBuilderP.
+Ilya Portnov <portnov84@rambler.ru>**20110514132232
+ Ignore-this: 59d9ce37218424e1bc225a42d71982ab
+ Remove unused datatype declaration and export usefull typeclass.
+] 
+[Extend script for generating the code which runs tests
+Adam Vogt <vogt.adam@gmail.com>**20110609040722
+ Ignore-this: 44ebbee2683f50bc0728458f4babcce
+ 
+ Now the number of runs each can be set, and the failures and successes are
+ summarized in the same way as the core Properties.hs. There is some duplicated
+ code which could be avoided by modifying Properties.hs.
+] 
+[Move tests from ManageDocks to tests/
+Adam Vogt <vogt.adam@gmail.com>**20110609040220
+ Ignore-this: 31d51fae83d88e15cdb69f29da003bf7
+ 
+ The change to use a newtype for RectC is kind of ugly, but this way instances
+ are less likely to conflict in the tests.
+] 
+[Export X.A.CycleWS.screenBy (issue 439)
+Adam Vogt <vogt.adam@gmail.com>**20110607002053
+ Ignore-this: 2eaa2a852a3356f6163c4d38f72e730f
+] 
+[X.H.FloatNext: export X.H.ToggleHook.runLogHook
+Tomas Janousek <tomi@nomi.cz>**20110528191700
+ Ignore-this: 5fd923e800a1a3f0977f126df7882c54
+ 
+ Otherwise the user has to import XMonad.Hooks.ToggleHook as well, which he
+ didn't have to in earlier versions.
+] 
+[Documentation fix (issue 445)
+Adam Vogt <vogt.adam@gmail.com>**20110527033521
+ Ignore-this: c73b88f9567af86bd560b911e33da301
+ 
+ Daniel's change which broke -Wall (adding an import for haddock only) was
+ somehow removed. Instead we can just modify the sample code to add the import.
+] 
+[X.A.AppendFile documentation fix.
+Adam Vogt <vogt.adam@gmail.com>**20110527032854
+ Ignore-this: 1ee126ddba1b06d07fba86ca43f74ab8
+ 
+ Forgotten > means haddock complained (and generated incorrect output).
+ More controversially I reworded a sentence and use do notation.
+] 
+[add-willhook-function
+Ben Boeckel <mathstuf@gmail.com>**20110515191718
+ Ignore-this: 9db50eec5b91baa973b4a92c72aeceaf
+ 
+ Adds a function that hooks into whether the hook will be triggered on the next
+ request.
+] 
+[use-map-in-toggle-hook
+Ben Boeckel <mathstuf@gmail.com>**20110515191418
+ Ignore-this: 2bf69aa1a875e7ef1748a5ab51b33daa
+ 
+ Use "Data.Map String (Bool, Bool)" instead of "[(String, (Bool, Bool))]" in
+ X.H.ToggleHook.
+] 
+[Extend GridSelect navigation
+Ilya Portnov <portnov84@rambler.ru>**20110515154246
+ Ignore-this: f2d279b8e46e6eaf3477fdc5cf77be63
+ Add moveNext and movePrev, which move selection to next/previous item. 
+] 
+[Generalize X.L.AutoMaster modifier
+Ilya Portnov <portnov84@rambler.ru>**20110514132549
+ Ignore-this: 481c35dd721405bab8b085c45cb983ce
+ Enable it to work not only with Windows, but with any (Eq) type.
+] 
+[Aesthetics on Flexiblemanipulate
+Mats Rauhala <mats.rauhala@gmail.com>**20110506094431
+ Ignore-this: 8864c1ba9723ebcc3b183ea9d636a203
+ 
+ Based on Adam Vogts recommendation on the mailing list. I had to give explicit
+ type signatures to get rid of warnings, but nearly verbatim to his version.
+] 
+[Add new layout combinator: LayoutBuilderP.
+Ilya Portnov <portnov84@rambler.ru>**20110511154010
+ Ignore-this: 377b748cb6b84ef7c9f7cde1d4ebd535
+ 
+ LayoutBuilderP is similar to LayoutBuilder (and is based on it), but LayoutBuilderP places windows matching given X.U.WindowProperties.Property (or any other predicate) into one rectangle, instead of fixed number of windows.
+] 
+[Compile with ghc7
+Mats Rauhala <mats.rauhala@gmail.com>**20110504192455
+ Ignore-this: 218d2e19835f1e4315c01bd6214899ce
+] 
+[Action search autocomplete based on whole line
+Mats Rauhala <mats.rauhala@gmail.com>**20110504215201
+ Ignore-this: 869cf6954be97ea05cbcf7457ab430b7
+ 
+ The previous version autocompleted based on words, but when searching from web
+ sites, it makes more sense to autocomplete based on the entire search.
+] 
+[documentation: tell where to find a few auxiliary functions that might be useful in conjunction with X.A.DynamicWorkspaces
+Daniel Wagner <daniel@wagner-home.com>**20110415224846
+ Ignore-this: 1bd2232081ba045582d230b632c5bd08
+] 
+[Typo in window-properties.sh
+Brandon S Allbery KF8NH <allbery.b@gmail.com>**20110413053002
+ Ignore-this: 4b3d4ef6ba7229f11d93b3cf66055698
+ Somewhere between my creating the original version of this script and
+ adding it to the tree, a backslash got lost.  It appears to have been
+ lost in the version I put on the wiki, so I suspect a copy-paste
+ problem at that point.
+] 
+[XMonad.Util.Run: resolve issue #441
+gwern0@gmail.com**20110411163740
+ Ignore-this: 9e3da81df65f6750c822a5044952f1a1
+ See <http://code.google.com/p/xmonad/issues/detail?id=441>
+ 
+ > I have run into programs that fail when run by safeSpawn but succeed with spawn.
+ > I tracked it down in one (python) and it seems to be due to uninstallSignalHandlers.
+ > When run by safeSpawn, the program reports errors from wait.
+ 
+ dylan did not supply a patch and his version doesn't match the declared type signature;
+ since I don't want to break every `safeSpawn` user, I tossed a `>> return ()` in to make
+ the type right, although I'm troubled at removing the exception functions.
+] 
+[XMonad.Hooks.FadeWindows: A generalized window fading hook
+Brandon S Allbery KF8NH <allbery.b@gmail.com>**20110226002436
+ Ignore-this: f21d1085ecca26602631f46c45bc198b
+] 
+[Script to simplify getting ManageHook information from a window
+Brandon S Allbery KF8NH <allbery.b@gmail.com>**20110224024937
+ Ignore-this: ef0e0089dca94c7c2321f791d5d7ffe
+] 
+[XMonad/Hooks/DebugKeyEvents - debug helper to see what keys xmonad sees
+Brandon S Allbery KF8NH <allbery.b@gmail.com>**20110224023613
+ Ignore-this: 5a6a99b7fcc31236152a82aa9c2cda16
+] 
+[Prevent non-default XUtils windows from being composited
+Brandon S Allbery KF8NH <allbery.b@gmail.com>**20110224003224
+ Ignore-this: 41a67b8504c412e2754085eb0038f416
+] 
+[XMonad.Hooks.FloatNext: issue #406, make FloatNext use ToggleHook
+gwern0@gmail.com**20110412015217
+ Ignore-this: d06aecd03be0cbd507d3738dfde6eee7
+] 
+[issue #406: ben boeckel <mathstuf@gmail.com> +XMonad.Hooks.ToggleHook
+gwern0@gmail.com**20110412015127
+ Ignore-this: 125891614da94a5ac0e66e39932aa17e
+] 
+[Fix xinerama workspace swapping with A.CopyWindow.killAllOtherCopies
+Adam Vogt <vogt.adam@gmail.com>**20110301033736
+ Ignore-this: de5727d1248d94447c4634a05a90d1cc
+ 
+ Spotted by arlinius in #xmonad, and this only shows up for xinerama setups.
+ Using an algorithm that scales better with number of workspaces would probably
+ be shorter too (visiting them in turn, rather than doing random access), but
+ probably not worth the effort.
+] 
+[AppendFile: additional example of usage
+gwern0@gmail.com**20110126201018
+ Ignore-this: 2ba40977463ff15140067ef73947785c
+] 
+[Fix A.Gridselect image links (thanks dobblego)
+Adam Vogt <vogt.adam@gmail.com>**20110119230113
+ Ignore-this: e2b334e13c5900a72daff866270b13db
+] 
+[Bump version to 0.10 to help keep the correct contrib/core versions together.
+Adam Vogt <vogt.adam@gmail.com>**20110115180553
+ Ignore-this: c3f3bf382225ec14477ed9298aea89af
+] 
+[H.ICCCMFocus had atom_WM_TAKE_FOCUS incorrectly removed
+Adam Vogt <vogt.adam@gmail.com>**20110106192052
+ Ignore-this: c566320f252d9fe717080e2da37ff262
+ 
+ It is possible that this atom should be defined in the X11 library, but fix the
+ build of contrib for now. In any case, this would have to wait for a change and
+ release of the X11 binding.
+ 
+ rolling back:
+ 
+ Wed Jan  5 22:38:39 EST 2011  Adam Vogt <vogt.adam@gmail.com>
+   * Remove accidental atom_WM_TAKE_FOCUS from H.ICCCMFocus
+   
+   The XMonad module exports this already
+ 
+     M ./XMonad/Hooks/ICCCMFocus.hs -7 +1
+] 
+[Remove accidental atom_WM_TAKE_FOCUS from H.ICCCMFocus
+Adam Vogt <vogt.adam@gmail.com>**20110106033839
+ Ignore-this: 318d60c8cf4ae4f22a7500948a40ebaf
+ 
+ The XMonad module exports this already
+] 
+[Java swing application focus patch
+haskell@tmorris.net**20110105032535
+ Ignore-this: 301805eb559489d34d984dc13c0fa5d0
+] 
+[fix X.L.Gaps documentation, thanks to Carl Mueller for the report
+Brent Yorgey <byorgey@cis.upenn.edu>**20101223010744
+ Ignore-this: d60b64676668d5b82efb9215ac5605f6
+] 
+[Fix A.OnScreen example code typo
+Adam Vogt <vogt.adam@gmail.com>**20101212161850
+ Ignore-this: 486bfc9edc38913c8863e2d5581359eb
+] 
+[fix up funny unicode whitespace in Fullscreen
+Brent Yorgey <byorgey@cis.upenn.edu>**20101212142241
+ Ignore-this: 406c4eec83838923edfbf0dfc554cbb7
+] 
+[Add X.L.Fullscreen
+Audun Skaugen <audunskaugen@gmail.com**20101116221611
+ Ignore-this: 4b460e9a25abbb4f988801052232147a
+] 
+[Close the display correctly after counting the number of screens
+quesel@informatik.uni-oldenburg.de**20101116081449
+ Ignore-this: 6fbc269e34770935fed7d4fd9494154b
+ 
+ This patch adds support for calling countScreens in arbitrary places. Prior to
+ this patch one would end up with an open display for each call of the
+ countScreens function with would eventually mess up X. This patch ensures that
+ the display that is no longer needed is closed after the operation and thus
+ using the function without side effects.
+] 
+[Compatibility with mtl-1 and mtl-2
+Adam Vogt <vogt.adam@gmail.com>**20101115232654
+ Ignore-this: 4fb7f279365992fe9e73388b0f4001ac
+] 
+[Rename state in A.Gridselect to avoid name shadowing (mtl-2)
+Adam Vogt <vogt.adam@gmail.com>**20101115232222
+ Ignore-this: cd81e11ae9f5372ddd71f0c2b60675d5
+] 
+[Substring search support for X.A.GridSelect. As keymaps get more complicated to support different styles, the gs_navigate element is fundamentially changed.
+Clemens Fruhwirth <clemens@endorphin.org>**20101102211213
+ Ignore-this: 95610ac8eb781cd74f6c3ce9e36ec039
+] 
+[Make substring search case insensitive
+Clemens Fruhwirth <clemens@endorphin.org>**20101016212904
+ Ignore-this: dce1ae9e4164c24447ae9c79c4557f11
+] 
+[Introduce grayoutAllElements in X.A.GridSelect
+Clemens Fruhwirth <clemens@endorphin.org>**20101016212559
+ Ignore-this: 78ca0416b12a49965db876c77e02387f
+] 
+[Add substring filter to td_elementmap
+Clemens Fruhwirth <clemens@endorphin.org>**20101016183644
+ Ignore-this: d28b7173095c504ae0e9209303e4468a
+] 
+[Refactor for ad-hoc element and position matching turning td_elementmap into a function using the new td_availSlot and td_elements fields
+Clemens Fruhwirth <clemens@endorphin.org>**20101016183554
+ Ignore-this: 85e644a27395e97315efd1ed7a926da8
+] 
+[Remove nub from diamondLayer in X.A.GridSelect
+Clemens Fruhwirth <clemens@endorphin.org>**20101016183132
+ Ignore-this: fe290f3712fa1e122e0123d3f87f418b
+] 
+[Convert access of td_elementmap from field styled to function call styled in X.A.GridSelect
+Clemens Fruhwirth <clemens@endorphin.org>**20101016164757
+ Ignore-this: b46942bf7ca0bd451b0b402ea8b01bf7
+] 
+[Make use of field names when constructing TwoDState in X.A.GridSelect
+Clemens Fruhwirth <clemens@endorphin.org>**20101016164151
+ Ignore-this: 17d947c11e6cb4c64e04fd4754568337
+] 
+[Pointfree and -XRank2Types don't mix in X.L.Groups.Helpers
+Adam Vogt <vogt.adam@gmail.com>**20101113022839
+ Ignore-this: 21aa9b687179c5622dc6fae749c7872
+ 
+ It used to work with ghc-6.12 (and earlier?), but ghc-7RC2 type inference
+ doesn't work with . instead of it's definition.
+] 
+[Restrict dependencies, since mtl-2 is incompatible
+Adam Vogt <vogt.adam@gmail.com>**20101113022204
+ Ignore-this: d6565f9033cc40fd177a20d1688f3ed7
+ 
+ A couple removed constructors need to be replaced by the lowercase versions
+ (ex. State = StateT Identity now). But it isn't clear that mtl-1 should be
+ dropped.
+] 
 [X.L.TrackFloating docs and help nested layouts
 Adam Vogt <vogt.adam@gmail.com>**20101030175615
  Ignore-this: a4362384ff8baab896715226772edf62
@@ -1365,4 +1797,4 @@ Spencer Janssen <spencerjanssen@gmail.com>**20091026013449
  Ignore-this: 542b6105d6deed65e12d1f91c666b0b2
 ] 
 Patch bundle hash:
-d17c37acb6785ce7b63c1e95635c969455e7f94c
+36be431d950b6e41a1b0d78eaa0daef97f28361c

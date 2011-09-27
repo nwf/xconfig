@@ -1,23 +1,13 @@
-5 patches for repository http://code.haskell.org/xmonad:
+3 patches for repository http://code.haskell.org/xmonad:
 
 Wed Nov  3 19:31:28 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add shutdownHook configuration callback
-
-Wed Nov  3 15:45:59 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * sigCHLD gets Catch-ed, not Ignored.
-  
-  This allows getProcessStatus True _ _ to work elsewhere while still reaping
-  zombies.
-  
 
 Wed Nov  3 19:37:06 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Make xmonad work when it isn't on $PATH
 
 Wed Nov  3 19:39:31 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add a messageHook to the configuration
-
-Sat Nov 20 20:29:54 EST 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Make xmonad use threaded runtime
 
 New patches:
 
@@ -77,7 +67,7 @@ hunk ./XMonad/Config.hs 251
      , XMonad.mouseBindings      = mouseBindings
      , XMonad.manageHook         = manageHook
      , XMonad.handleEventHook    = handleEventHook
-hunk ./XMonad/Core.hs 111
+hunk ./XMonad/Core.hs 109
      , borderWidth        :: !Dimension           -- ^ The border width
      , logHook            :: !(X ())              -- ^ The action to perform when the windows set is changed
      , startupHook        :: !(X ())              -- ^ The action to perform on startup
@@ -85,7 +75,7 @@ hunk ./XMonad/Core.hs 111
      , focusFollowsMouse  :: !Bool                -- ^ Whether window entry events can change focus
      }
  
-hunk ./XMonad/Operations.hs 38
+hunk ./XMonad/Operations.hs 37
  import Control.Monad.State
  import qualified Control.Exception.Extensible as C
  
@@ -93,7 +83,7 @@ hunk ./XMonad/Operations.hs 38
  import System.Posix.Process (executeFile)
  import Graphics.X11.Xlib
  import Graphics.X11.Xinerama (getScreenInfo)
-hunk ./XMonad/Operations.hs 408
+hunk ./XMonad/Operations.hs 407
  
  ------------------------------------------------------------------------
  
@@ -111,7 +101,7 @@ hunk ./XMonad/Operations.hs 408
  -- | @restart name resume@. Attempt to restart xmonad by executing the program
  -- @name@.  If @resume@ is 'True', restart with the current window state.
  -- When executing another window manager, @resume@ should be 'False'.
-hunk ./XMonad/Operations.hs 424
+hunk ./XMonad/Operations.hs 423
  restart :: String -> Bool -> X ()
  restart prog resume = do
 -    broadcastMessage ReleaseResources
@@ -128,54 +118,6 @@ hunk ./man/xmonad.hs 122
  
      -- Restart xmonad
      , ((modm              , xK_q     ), spawn "xmonad --recompile; xmonad --restart")
-}
-[sigCHLD gets Catch-ed, not Ignored.
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103194559
- Ignore-this: 56903583a1e8b5b9dfef2c6faef6b498
- 
- This allows getProcessStatus True _ _ to work elsewhere while still reaping
- zombies.
- 
-] {
-hunk ./XMonad/Core.hs 458
-     binT <- getModTime bin
-     if force || any (binT <) (srcT : libTs)
-       then do
--        -- temporarily disable SIGCHLD ignoring:
--        uninstallSignalHandlers
-         status <- bracket (openFile err WriteMode) hClose $ \h ->
-             waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-o",binn] (Just dir)
-                                     Nothing Nothing Nothing (Just h)
-hunk ./XMonad/Core.hs 462
- 
--        -- re-enable SIGCHLD:
--        installSignalHandlers
--
-         -- now, if it fails, run xmessage to let the user know:
-         when (status /= ExitSuccess) $ do
-             ghcErr <- readFile err
-hunk ./XMonad/Core.hs 501
- installSignalHandlers :: MonadIO m => m ()
- installSignalHandlers = io $ do
-     installHandler openEndedPipe Ignore Nothing
--    installHandler sigCHLD Ignore Nothing
--    (try :: IO a -> IO (Either SomeException a))
--      $ fix $ \more -> do
-+    installHandler sigCHLD (Catch childhandler) Nothing
-+    childhandler
-+    return ()
-+ where
-+  childhandler = do
-+     (try :: IO a -> IO (Either SomeException a)) $
-+       fix $ \more -> do
-         x <- getAnyProcessStatus False False
-         when (isJust x) more
-hunk ./XMonad/Core.hs 510
--    return ()
-+     return ()
- 
- uninstallSignalHandlers :: MonadIO m => m ()
- uninstallSignalHandlers = io $ do
 }
 [Make xmonad work when it isn't on $PATH
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103233706
@@ -299,7 +241,7 @@ hunk ./XMonad/Config.hs 262
      , XMonad.startupHook        = startupHook
      , XMonad.shutdownHook       = shutdownHook
      , XMonad.mouseBindings      = mouseBindings
-hunk ./XMonad/Core.hs 110
+hunk ./XMonad/Core.hs 108
                                                   -- ^ The mouse bindings
      , borderWidth        :: !Dimension           -- ^ The border width
      , logHook            :: !(X ())              -- ^ The action to perform when the windows set is changed
@@ -308,21 +250,100 @@ hunk ./XMonad/Core.hs 110
      , shutdownHook       :: !(X ())              -- ^ The action to perform on shutdown
      , focusFollowsMouse  :: !Bool                -- ^ Whether window entry events can change focus
 }
-[Make xmonad use threaded runtime
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101121012954
- Ignore-this: 18abbd47312a071f838b5b45bdb50aa1
-] hunk ./XMonad/Core.hs 460
-     if force || any (binT <) (srcT : libTs)
-       then do
-         status <- bracket (openFile err WriteMode) hClose $ \h ->
--            waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-o",binn] (Just dir)
-+            waitForProcess =<< runProcess "ghc" ["--make", "xmonad.hs", "-i", "-ilib", "-fforce-recomp", "-v0", "-threaded", "-o",binn] (Just dir)
-                                     Nothing Nothing Nothing (Just h)
- 
-         -- now, if it fails, run xmessage to let the user know:
 
 Context:
 
+[recognize the --replace option
+Daniel Wagner <daniel@wagner-home.com>**20110809195250
+ Ignore-this: 144ecf69bf57464f0de5a68837142190
+] 
+[Break a long line
+Adam Vogt <vogt.adam@gmail.com>**20110609042424
+ Ignore-this: 5f4c8907066e1ea5df3f384a34951402
+] 
+[output error code when xmonad.hs compile fails without any error output
+Jens Petersen <juhp@community.haskell.org>**20110426062341
+ Ignore-this: 6249588a9d427a49fceb99d78a95c438
+ 
+ Currently if there is no ghc on the path say for some reason,
+ xmonad.error is empty.  This patch makes
+ it output the exitcode code when the compile process fails
+ without any error output.  (It might be easier just to spawn
+ a shell to get "ghc: command not found" output for free.)
+] 
+[Remove -fglasgow-exts for deriving Data/Typeable needed with ghc-6.6
+Adam Vogt <vogt.adam@gmail.com>**20110608230415
+ Ignore-this: 8f9e33a86a9919406792383c49ac4555
+ 
+ This gets rid of a warning with ghc-7.0.2, and -XDeriveDataTypeable seems to
+ have been added with 6.8, which should be far back enough:
+ http://www.haskell.org/ghc/docs/6.8-latest/html/users_guide/deriving.html#deriving-typeable
+] 
+[Expose instances to haddock
+Adam Vogt <vogt.adam@gmail.com>**20110608225613
+ Ignore-this: e3ab1e9940061a70a3c1c99a119af29e
+ 
+ While haddock may have choked on -XGeneralizedNewtypeDeriving before, this is
+ no longer the case. Also this doesn't change the results with a recent haddock
+ (2.9.2)
+] 
+[Haddock formatting for a type (-->)
+Adam Vogt <vogt.adam@gmail.com>**20110524015135
+ Ignore-this: 1d5ef3e32540bbfbf60578858895d7c
+] 
+[Generalize types of ManageHook functions, so they can be reused
+Brandon S Allbery KF8NH <allbery.b@gmail.com>**20110224003021
+ Ignore-this: 2328f5a2ca705279ba8ae1fe4decd03e
+] 
+[HCAR.tex: update per Janis's final version
+gwern0@gmail.com**20110522183755
+ Ignore-this: f42a8081a62954d342790409cf12542c
+] 
+[HCAR.text: mention 2 features added since last HCAR
+gwern0@gmail.com**20110411164519
+ Ignore-this: 8fa9ad872a5cf932c3903cd12163ba7d
+ Prompted by Janis's usual request for updated HCARs
+] 
+[Correct misleading documentation on Stack (thanks sdrodge)
+Adam Vogt <vogt.adam@gmail.com>**20110328001930
+ Ignore-this: 518574016a9c15a741acdb6d2fa2e870
+ 
+ `Possibly empty' applies only to `Maybe (Stack a)', not `Stack a' described
+ there, so this is easier to understand.
+] 
+[HCAR.tex: apply Janis Voigtlaender's HCAR changes
+gwern0@gmail.com**20101109205022
+ Ignore-this: 788da7a151c6094e11709bb1a95299c
+] 
+[Bump version to 0.10
+Adam Vogt <vogt.adam@gmail.com>**20110115180715
+ Ignore-this: 70cb07b7d9913a6590c16a366842903
+ 
+ This doesn't mean it's ready for this number release, but at least
+ contrib/core incompatibilities introduced since 0.9 will be avoided.
+] 
+[Update util/GenerateManpage for pandoc 1.6
+Adam Vogt <vogt.adam@gmail.com>**20101231163118
+ Ignore-this: 6fdd88c649d37670501aa47594586ee6
+] 
+[Update util/GenerateManpage to be pandoc-1.4 compatible
+Adam Vogt <vogt.adam@gmail.com>**20100403181354
+ Ignore-this: 3f5efd5786ef0182a6f86494d1d933c9
+] 
+[HCAR.tex: update from May
+gwern0@gmail.com**20101012010915
+ Ignore-this: 5f08180e92a2bd8e4cec66c89265ca85
+ - there were no significant changes to xmonad-core
+ - description of 2 new modules not mentioned in HCAR
+] 
+[Update comments describing `recompile'
+Adam Vogt <vogt.adam@gmail.com>**20100403181115
+ Ignore-this: 8375f7011256783c763c78e127f89a4a
+] 
+[Note things to update each release.
+Adam Vogt <vogt.adam@gmail.com>**20100322150622
+ Ignore-this: e68604d52a117365347e2ec8ee99c1f2
+] 
 [XMonad.Core: escape slashes, ln module
 gwern0@gmail.com**20100620175741
  Ignore-this: 436bd4d12e73c0fbb46a946d6dfb5306
@@ -487,4 +508,4 @@ Spencer Janssen <spencerjanssen@gmail.com>**20091026004641
  Ignore-this: 80347d432f3b606c8d722536d0d729aa
 ] 
 Patch bundle hash:
-48e827b65a135ea05d0a19d5630700b807b1a308
+624f3dbf08e2c3a9f78f257b1bbadb853b228573
