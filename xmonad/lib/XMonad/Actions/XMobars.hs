@@ -26,8 +26,9 @@ import qualified XMonad.Util.WindowProperties as UW
 
 import Control.Monad (foldM,when)
 import qualified Data.IntMap as IM
-import Data.List (stripPrefix)
+import Data.List (find, stripPrefix)
 import qualified Data.Map as M
+import Data.Maybe (fromJust)
 import Data.Monoid (All(All))
 import System.IO (Handle, hClose, hPutStrLn, stderr)
 import System.Posix.Signals (signalProcess, keyboardSignal)
@@ -160,25 +161,26 @@ killxmobars = do
 xmobarLH :: X ()
 xmobarLH = do
      ws <- gets windowset
-     UE.get >>= IM.foldWithKey (\s (h,_) a -> a >> do
-          HDL.dynamicLogWithPP (HDL.xmobarPP
+     UE.get >>= IM.foldWithKey (\s (h,_) a -> a >>
+            HDL.dynamicLogWithPP (base
             { HDL.ppOutput = hPutStrLn h
             , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 40
             , HDL.ppLayout = \s -> maybe s id $ stripPrefix "Hinted " s
-            , HDL.ppOverride = \wk -> do
-                 ws <- gets windowset
-                 return $ if (S.currentTag ws == S.tag wk
-                    && (S s) /= S.screen (S.current ws))
-                  then Just$HDL.xmobarColor "yellow" ""
-                           $HDL.wrap "{" "}" (S.tag wk)
-                  else Nothing
-            -- , HDL.ppCurrent = \wid -> maybe False ((== s) . S.screen) 
+            , HDL.ppCurrent = if (S s) /= S.screen (S.current ws)
+                  then \w -> HDL.xmobarColor "yellow" "" $
+                       HDL.wrap "{" "}" w
+                  else HDL.ppCurrent base
+            , HDL.ppVisible = \w ->
+                      -- fromJust safe here since ppVisible called only for
+                      -- `elem` (map (S.tag . S.workspace) (S.visible ws))
+                  let scr = fromJust $ find ((== w) . S.tag . S.workspace)
+                                            (S.visible ws)
+                  in if (S s) == S.screen scr
+                      then HDL.wrap "<" ">" w
+                      else HDL.ppVisible base w
             }))
         (return ()) . (xmScreenState)
- -- where actcur = xmobarColor "yellow" "" . wrap "[" "]"
- --      actvis = xmobarColor "yellow" "" . wrap "(" ")"
-       
-
+ where base = HDL.xmobarPP
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------ Event hook {{{
