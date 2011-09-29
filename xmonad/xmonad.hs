@@ -23,6 +23,7 @@ import qualified XMonad.Actions.WithAll as AWA
 import qualified XMonad.Actions.XMobars as AXB
 import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
+import qualified XMonad.Hooks.UrgencyHook as HUH
 import qualified XMonad.Layout as L
 import qualified XMonad.Layout.IndependentScreens as LIS
 import qualified XMonad.Layout.LayoutHints as LLH
@@ -39,6 +40,7 @@ import qualified XMonad.Util.Cursor as UC
 import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.EZConfig as EZC
 import qualified XMonad.Util.WindowProperties as UW
+
 
 import Control.Monad (ap,liftM2,when)
 import Data.Maybe (isNothing)
@@ -297,7 +299,8 @@ main = do
              , "--window-strut", "top"
              ] Nothing
   -}
-  xmonad $ customKeys defaultConfig
+  xmonad $ HUH.withUrgencyHook HUH.NoUrgencyHook
+         $ customKeys defaultConfig
       { modMask = mod4Mask
       , terminal = "urxvtcd"
       , workspaces = privworkspaces ++ deflworkspaces ++ addlworkspaces
