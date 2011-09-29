@@ -1,0 +1,3 @@
+URxvt.foreground: darkgoldenrod
+URxvt.background: black
+URxvt.urgentOnBell: true
