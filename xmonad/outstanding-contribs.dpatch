@@ -1,7 +1,4 @@
-5 patches for repository http://code.haskell.org/XMonadContrib:
-
-Thu Oct 21 01:40:12 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Support for filters in XMonad.Prompt.Window
+7 patches for repository http://code.haskell.org/XMonadContrib:
 
 Wed Nov  3 15:55:05 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Use messageHook in Util.EZConfig
@@ -9,92 +6,23 @@ Wed Nov  3 15:55:05 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
 Wed Nov  3 15:55:18 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Use messageHook in Util.NamedActions
 
-Tue Apr 12 01:07:54 EDT 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Add spawnPipePid
-
 Tue Sep 27 18:20:53 EDT 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add ppOverride to Hooks.DynamicLog
 
+Fri Nov 18 14:20:49 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Add spawnPipePid
+
+Fri Nov 18 14:24:44 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Support for filters in XMonad.Prompt.Window
+
+Fri Nov 18 14:29:12 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Make XMonad.Prompt use the main event loop
+
+Fri Nov 18 14:30:13 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Export adjustUrgents from XMonad.Hooks.UrgencyHook
+
 New patches:
 
-[Support for filters in XMonad.Prompt.Window
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101021054012
- Ignore-this: 38ec7cdfc39c2dfefd64f6aae7177551
-] {
-hunk ./XMonad/Prompt/Window.hs 23
-     -- $usage
-     windowPromptGoto,
-     windowPromptBring,
--    windowPromptBringCopy
-+    windowPromptBringCopy,
-+
-+    WindowFilter,
-+    windowPromptGotoF,
-+    windowPromptBringF,
-+    windowPromptBringCopyF,
-+
-+    windowPromptGotoCurrent,
-     ) where
- 
-hunk ./XMonad/Prompt/Window.hs 33
-+import Control.Monad
- import qualified Data.Map as M
- 
- import qualified XMonad.StackSet as W
-hunk ./XMonad/Prompt/Window.hs 69
- -- For detailed instruction on editing the key binding see
- -- "XMonad.Doc.Extending#Editing_key_bindings".
- 
-+type WindowFilter = String -> Window -> Bool
- data WindowPrompt = Goto | Bring | BringCopy
- instance XPrompt WindowPrompt where
-     showXPrompt Goto      = "Go to window: "
-hunk ./XMonad/Prompt/Window.hs 79
-     nextCompletion      _ = getNextCompletion
- 
- windowPromptGoto, windowPromptBring, windowPromptBringCopy :: XPConfig -> X ()
--windowPromptGoto  = doPrompt Goto
--windowPromptBring = doPrompt Bring
--windowPromptBringCopy = doPrompt BringCopy
-+windowPromptGoto  = doPrompt Goto Nothing
-+windowPromptBring = doPrompt Bring Nothing
-+windowPromptBringCopy = doPrompt BringCopy Nothing
-+
-+windowPromptGotoF, windowPromptBringF, windowPromptBringCopyF
-+    :: X WindowFilter -> XPConfig -> X()
-+windowPromptGotoF = doPrompt Goto . Just
-+windowPromptBringF = doPrompt Bring . Just
-+windowPromptBringCopyF = doPrompt BringCopy . Just
-+
-+currentTagFilter :: X WindowFilter
-+currentTagFilter = do
-+                    cws <- gets windowset
-+                    let ct = W.currentTag cws
-+                    return $ \_ w -> maybe False (== ct) (W.findTag w cws)
-+
-+windowPromptGotoCurrent :: XPConfig -> X()
-+windowPromptGotoCurrent = windowPromptGotoF currentTagFilter
- 
- -- | Pops open a prompt with window titles. Choose one, and you will be
- -- taken to the corresponding workspace.
-hunk ./XMonad/Prompt/Window.hs 100
--doPrompt :: WindowPrompt -> XPConfig -> X ()
--doPrompt t c = do
-+doPrompt :: WindowPrompt -> Maybe (X WindowFilter) -> XPConfig -> X ()
-+doPrompt t mxf c = do
-   a <- case t of
-          Goto  -> fmap gotoAction  windowMap
-          Bring -> fmap bringAction windowMap
-hunk ./XMonad/Prompt/Window.hs 107
-          BringCopy -> fmap bringCopyAction windowMap
-   wm <- windowMap
--  mkXPrompt t c (compList wm) a
-+  cm <- maybe (return wm) (liftM $ flip M.filterWithKey wm) mxf
-+  mkXPrompt t c (compList cm) a
- 
-     where
-       winAction a m    = flip whenJust (windows . a) . flip M.lookup m
-}
 [Use messageHook in Util.EZConfig
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103195505
  Ignore-this: 1e564495fbcecd3d1444f21d98183c25
@@ -139,55 +67,6 @@ hunk ./XMonad/Util/NamedActions.hs 203
      return ()
  
  -- | Merge the supplied keys with 'defaultKeysDescr', also adding a keybinding
-}
-[Add spawnPipePid
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20110412050754
- Ignore-this: f91b0c8bb2fde2ec5dddd86b169d9b74
-] {
-hunk ./XMonad/Util/Run.hs 29
-                           runInTerm,
-                           safeRunInTerm,
-                           seconds,
-+                          spawnPipePid,
-                           spawnPipe,
- 
-                           hPutStr, hPutStrLn  -- re-export for convenience
-hunk ./XMonad/Util/Run.hs 37
- 
- import System.Posix.IO
- import System.Posix.Process (createSession, executeFile, forkProcess)
-+import System.Posix.Types (ProcessID)
- import Control.Concurrent (threadDelay)
- import System.IO
- import System.Process (runInteractiveProcess)
-hunk ./XMonad/Util/Run.hs 137
- safeRunInTerm :: String -> String -> X ()
- safeRunInTerm options command = asks (terminal . config) >>= \t -> safeSpawn t [options, " -e " ++ command]
- 
---- | Launch an external application through the system shell and return a @Handle@ to its standard input.
--spawnPipe :: MonadIO m => String -> m Handle
--spawnPipe x = io $ do
-+spawnPipePid :: MonadIO m => String -> m (Handle, ProcessID)
-+spawnPipePid x = io $ do
-     (rd, wr) <- createPipe
-     setFdOption wr CloseOnExec True
-     h <- fdToHandle wr
-hunk ./XMonad/Util/Run.hs 143
-     hSetBuffering h LineBuffering
--    _ <- xfork $ do
--          _ <- dupTo rd stdInput
--          executeFile "/bin/sh" False ["-c", x] Nothing
-+    pid <- xfork $ do
-+        dupTo rd stdInput
-+        executeFile "/bin/sh" False ["-c", x] Nothing
-     closeFd rd
-hunk ./XMonad/Util/Run.hs 147
--    return h
-+    return (h, pid)
-+
-+-- | Launch an external application through the system shell and return a @Handle@ to its standard input.
-+spawnPipe :: MonadIO m => String -> m Handle
-+spawnPipe = liftM fst . spawnPipePid
 }
 [Add ppOverride to Hooks.DynamicLog
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20110927222053
@@ -259,9 +138,752 @@ hunk ./XMonad/Hooks/DynamicLog.hs 473
                 , ppWsSep           = " "
                 , ppTitle           = shorten 80
 }
+[Add spawnPipePid
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118192049
+ Ignore-this: dd170973d9496af1b9872ec2124306cd
+] {
+hunk ./XMonad/Util/Run.hs 29
+                           runInTerm,
+                           safeRunInTerm,
+                           seconds,
++                          spawnPipePid,
+                           spawnPipe,
+ 
+                           hPutStr, hPutStrLn  -- re-export for convenience
+hunk ./XMonad/Util/Run.hs 38
+ import Codec.Binary.UTF8.String
+ import System.Posix.IO
+ import System.Posix.Process (createSession, executeFile, forkProcess)
++import System.Posix.Types (ProcessID)
+ import Control.Concurrent (threadDelay)
+ import System.IO
+ import System.Process (runInteractiveProcess)
+hunk ./XMonad/Util/Run.hs 140
+ safeRunInTerm :: String -> String -> X ()
+ safeRunInTerm options command = asks (terminal . config) >>= \t -> safeSpawn t [options, " -e " ++ command]
+ 
+--- | Launch an external application through the system shell and return a @Handle@ to its standard input.
+-spawnPipe :: MonadIO m => String -> m Handle
+-spawnPipe x = io $ do
++spawnPipePid :: MonadIO m => String -> m (Handle, ProcessID)
++spawnPipePid x = io $ do
+     (rd, wr) <- createPipe
+     setFdOption wr CloseOnExec True
+     h <- fdToHandle wr
+hunk ./XMonad/Util/Run.hs 146
+     hSetBuffering h LineBuffering
+-    _ <- xfork $ do
+-          _ <- dupTo rd stdInput
+-          executeFile "/bin/sh" False ["-c", encodeString x] Nothing
++    pid <- xfork $ do
++        dupTo rd stdInput
++        executeFile "/bin/sh" False ["-c", x] Nothing
+     closeFd rd
+hunk ./XMonad/Util/Run.hs 150
+-    return h
++    return (h, pid)
++
++-- | Launch an external application through the system shell and return a @Handle@ to its standard input.
++spawnPipe :: MonadIO m => String -> m Handle
++spawnPipe = liftM fst . spawnPipePid
+}
+[Support for filters in XMonad.Prompt.Window
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118192444
+ Ignore-this: ff4e06cdc25cf3a08b6af8992298681e
+] {
+hunk ./XMonad/Prompt/Window.hs 24
+     windowPromptGoto,
+     windowPromptBring,
+     windowPromptBringCopy,
++
++    WindowFilter,
++    windowPromptGotoF,
++    windowPromptBringF,
++    windowPromptBringCopyF,
++
++    windowPromptGotoCurrent,
+     WindowPrompt,
+     ) where
+ 
+hunk ./XMonad/Prompt/Window.hs 34
++import Control.Monad
+ import qualified Data.Map as M
+ 
+ import qualified XMonad.StackSet as W
+hunk ./XMonad/Prompt/Window.hs 70
+ -- For detailed instruction on editing the key binding see
+ -- "XMonad.Doc.Extending#Editing_key_bindings".
+ 
++type WindowFilter = String -> Window -> Bool
+ data WindowPrompt = Goto | Bring | BringCopy
+ instance XPrompt WindowPrompt where
+     showXPrompt Goto      = "Go to window: "
+hunk ./XMonad/Prompt/Window.hs 80
+     nextCompletion      _ = getNextCompletion
+ 
+ windowPromptGoto, windowPromptBring, windowPromptBringCopy :: XPConfig -> X ()
+-windowPromptGoto  = doPrompt Goto
+-windowPromptBring = doPrompt Bring
+-windowPromptBringCopy = doPrompt BringCopy
++windowPromptGoto  = doPrompt Goto Nothing
++windowPromptBring = doPrompt Bring Nothing
++windowPromptBringCopy = doPrompt BringCopy Nothing
++
++windowPromptGotoF, windowPromptBringF, windowPromptBringCopyF
++    :: X WindowFilter -> XPConfig -> X()
++windowPromptGotoF = doPrompt Goto . Just
++windowPromptBringF = doPrompt Bring . Just
++windowPromptBringCopyF = doPrompt BringCopy . Just
++
++currentTagFilter :: X WindowFilter
++currentTagFilter = do
++                    cws <- gets windowset
++                    let ct = W.currentTag cws
++                    return $ \_ w -> maybe False (== ct) (W.findTag w cws)
++
++windowPromptGotoCurrent :: XPConfig -> X()
++windowPromptGotoCurrent = windowPromptGotoF currentTagFilter
+ 
+ -- | Pops open a prompt with window titles. Choose one, and you will be
+ -- taken to the corresponding workspace.
+hunk ./XMonad/Prompt/Window.hs 101
+-doPrompt :: WindowPrompt -> XPConfig -> X ()
+-doPrompt t c = do
++doPrompt :: WindowPrompt -> Maybe (X WindowFilter) -> XPConfig -> X ()
++doPrompt t mxf c = do
+   a <- case t of
+          Goto  -> fmap gotoAction  windowMap
+          Bring -> fmap bringAction windowMap
+hunk ./XMonad/Prompt/Window.hs 108
+          BringCopy -> fmap bringCopyAction windowMap
+   wm <- windowMap
+-  mkXPrompt t c (compList wm) a
++  cm <- maybe (return wm) (liftM $ flip M.filterWithKey wm) mxf
++  mkXPrompt t c (compList cm) a
+ 
+     where
+       winAction a m    = flip whenJust (windows . a) . flip M.lookup m
+}
+[Make XMonad.Prompt use the main event loop
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118192912
+ Ignore-this: 13890606f1edf4076c5f78b95cdc850e
+] {
+hunk ./XMonad/Hooks/DynamicLog.hs 203
+     h <- spawnPipe cmd
+     return $ conf
+         { layoutHook = avoidStruts (layoutHook conf)
+-        , logHook = do
+-                        logHook conf
+-                        dynamicLogWithPP pp { ppOutput = hPutStrLn h }
++        , logHook = do logHook conf
++                       dynamicLogWithPP (pp { ppOutput = hPutStrLn h })
+         , manageHook = manageHook conf <+> manageDocks
+         , keys       = liftM2 M.union keys' (keys conf)
+         }
+hunk ./XMonad/Hooks/EwmhDesktops.hs 120
+ --
+ --  * _NET_ACTIVE_WINDOW (activate another window, changing workspace if needed)
+ --
+-ewmhDesktopsEventHook :: Event -> X All
+-ewmhDesktopsEventHook e = handle e >> return (All True)
++ewmhDesktopsEventHook :: EventHook
++ewmhDesktopsEventHook _ e = handle e >> return (All True)
+ 
+ handle :: Event -> X ()
+ handle ClientMessageEvent {
+hunk ./XMonad/Hooks/EwmhDesktops.hs 163
+ -- An event hook to handle applications that wish to fullscreen using the
+ -- _NET_WM_STATE protocol. This includes users of the gtk_window_fullscreen()
+ -- function, such as Totem, Evince and OpenOffice.org.
+-fullscreenEventHook :: Event -> X All
+-fullscreenEventHook (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
++fullscreenEventHook :: EventHook
++fullscreenEventHook _ (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
+   state <- getAtom "_NET_WM_STATE"
+   fullsc <- getAtom "_NET_WM_STATE_FULLSCREEN"
+   wstate <- fromMaybe [] `fmap` getProp32 state win
+hunk ./XMonad/Hooks/EwmhDesktops.hs 188
+ 
+   return $ All True
+ 
+-fullscreenEventHook _ = return $ All True
++fullscreenEventHook _ _ = return $ All True
+ 
+ setNumberOfDesktops :: (Integral a) => a -> X ()
+ setNumberOfDesktops n = withDisplay $ \dpy -> do
+hunk ./XMonad/Hooks/Minimize.hs 39
+ -- > main = xmonad defaultConfig { layoutHook = myLayout
+ -- >                             , handleEventHook = myHandleEventHook }
+ 
+-minimizeEventHook :: Event -> X All
+-minimizeEventHook (ClientMessageEvent {ev_window = w,
++minimizeEventHook :: EventHook
++minimizeEventHook _ (ClientMessageEvent {ev_window = w,
+                                        ev_message_type = mt,
+                                        ev_data = dt}) = do
+     a_aw <- getAtom "_NET_ACTIVE_WINDOW"
+hunk ./XMonad/Hooks/Minimize.hs 53
+       when (message == iconicState) $ minimizeWindow w
+ 
+     return (All True)
+-minimizeEventHook _ = return (All True)
++minimizeEventHook _ _ = return (All True)
+hunk ./XMonad/Hooks/PositionStoreHooks.hs 101
+         randomIntOffset :: X (Int)
+         randomIntOffset = io $ randomRIO (42, 242)
+ 
+-positionStoreEventHook :: Event -> X All
+-positionStoreEventHook (DestroyWindowEvent {ev_window = w, ev_event_type = et}) = do
++positionStoreEventHook :: EventHook
++positionStoreEventHook _ (DestroyWindowEvent {ev_window = w, ev_event_type = et}) = do
+     when (et == destroyNotify) $ do
+         modifyPosStore (\ps -> posStoreRemove ps w)
+     return (All True)
+hunk ./XMonad/Hooks/PositionStoreHooks.hs 106
+-positionStoreEventHook _ = return (All True)
++positionStoreEventHook _ _ = return (All True)
+hunk ./XMonad/Hooks/ServerMode.hs 89
+ 
+ -- | Executes a command of the list when receiving its index via a special ClientMessageEvent
+ -- (indexing starts at 1)
+-serverModeEventHook :: Event -> X All
++serverModeEventHook :: EventHook
+ serverModeEventHook = serverModeEventHook' defaultCommands
+ 
+ -- | serverModeEventHook' additionally takes an action to generate the list of
+hunk ./XMonad/Hooks/ServerMode.hs 94
+ -- commands.
+-serverModeEventHook' :: X [(String,X ())] -> Event -> X All
+-serverModeEventHook' cmdAction (ClientMessageEvent {ev_message_type = mt, ev_data = dt}) = do
++serverModeEventHook' :: X [(String,X ())] -> EventHook
++serverModeEventHook' cmdAction _ (ClientMessageEvent {ev_message_type = mt, ev_data = dt}) = do
+         d <- asks display
+         a <- io $ internAtom d "XMONAD_COMMAND" False
+         when (mt == a && dt /= []) $ do
+hunk ./XMonad/Hooks/ServerMode.hs 105
+                   Just (_,action) -> action
+                   Nothing         -> mapM_ (io . hPutStrLn stderr) . listOfCommands $ cl
+         return (All True)
+-serverModeEventHook' _ _ = return (All True)
++serverModeEventHook' _ _ _ = return (All True)
+hunk ./XMonad/Hooks/UrgencyHook.hs 85
+ import Data.Bits (testBit)
+ import Data.List (delete, (\\))
+ import Data.Maybe (listToMaybe, maybeToList)
++import Foreign.Ptr (Ptr)
+ import qualified Data.Set as S
+ 
+ -- $usage
+hunk ./XMonad/Hooks/UrgencyHook.hs 329
+ -- ourselves, allowing us to clear urgency when a window is visible, and not to
+ -- set urgency if a window is visible. If you have a better idea, please, let us
+ -- know!
+-handleEvent :: UrgencyHook h => WithUrgencyHook h -> Event -> X ()
+-handleEvent wuh event =
++handleEvent :: UrgencyHook h => WithUrgencyHook h -> Ptr XEvent -> Event -> X ()
++handleEvent wuh _ event =
+     case event of
+       PropertyEvent { ev_event_type = t, ev_atom = a, ev_window = w } -> do
+           when (t == propertyNotify && a == wM_HINTS) $ withDisplay $ \dpy -> do
+hunk ./XMonad/Layout/Fullscreen.hs 175
+ fullscreenFloatRect r = ModifiedLayout $ FullscreenFloat r M.empty
+ 
+ -- | The event hook required for the layout modifiers to work
+-fullscreenEventHook :: Event -> X All
+-fullscreenEventHook (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
++fullscreenEventHook :: EventHook
++fullscreenEventHook _ (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
+   state <- getAtom "_NET_WM_STATE"
+   fullsc <- getAtom "_NET_WM_STATE_FULLSCREEN"
+   wstate <- fromMaybe [] `fmap` getProp32 state win
+hunk ./XMonad/Layout/Fullscreen.hs 199
+       sendMessage FullscreenChanged
+   return $ All True
+ 
+-fullscreenEventHook (DestroyWindowEvent {ev_window = w}) = do
++fullscreenEventHook _ (DestroyWindowEvent {ev_window = w}) = do
+   -- When a window is destroyed, the layouts should remove that window
+   -- from their states.
+   broadcastMessage $ RemoveFullscreen w
+hunk ./XMonad/Layout/Fullscreen.hs 207
+   sendMessageWithNoRefresh FullscreenChanged cw
+   return $ All True
+ 
+-fullscreenEventHook _ = return $ All True
++fullscreenEventHook _ _ = return $ All True
+ 
+ -- | Manage hook that sets the fullscreen property for
+ -- windows that are initially fullscreen
+hunk ./XMonad/Prompt.hs 1
++{-# LANGUAGE DeriveDataTypeable #-}
+ {-# LANGUAGE ExistentialQuantification #-}
+hunk ./XMonad/Prompt.hs 3
++{-# LANGUAGE Rank2Types #-}
+ -----------------------------------------------------------------------------
+ -- |
+ -- Module      :  XMonad.Prompt
+hunk ./XMonad/Prompt.hs 22
+     ( -- * Usage
+       -- $usage
+       mkXPrompt
+-    , mkXPromptWithReturn
++    , eventHandle
+     , amberXPConfig
+     , defaultXPConfig
+     , greenXPConfig
+hunk ./XMonad/Prompt.hs 75
+ import XMonad  hiding (config, cleanMask)
+ import qualified XMonad as X (numberlockMask)
+ import qualified XMonad.StackSet as W
++import qualified XMonad.Util.ExtensibleState as XS
+ import XMonad.Util.Font
+ import XMonad.Util.Types
+ import XMonad.Util.XSelection (getSelection)
+hunk ./XMonad/Prompt.hs 91
+ import Data.IORef
+ import Data.List
+ import Data.Maybe (fromMaybe)
++import Data.Monoid (All(..))
+ import Data.Set (fromList, toList)
+ import System.Directory (getAppUserDataDirectory)
+ import System.IO
+hunk ./XMonad/Prompt.hs 120
+         , gcon               :: !GC
+         , fontS              :: !XMonadFont
+         , xptype             :: !XPType
++        , history            :: History
+         , commandHistory     :: W.Stack String
+         , offset             :: !Int
+         , config             :: XPConfig
+hunk ./XMonad/Prompt.hs 127
+         , successful         :: Bool
+         , numlockMask        :: KeyMask
+         , done               :: Bool
++        , stepfn             :: KeyStroke -> Event -> XP ()
++        , sact               :: String -> X ()
++        , fact               :: X ()
+         }
+ 
+ data XPConfig =
+hunk ./XMonad/Prompt.hs 238
+ type ComplFunction = String -> IO [String]
+ 
+ initState :: XPrompt p => Display -> Window -> Window -> Rectangle -> ComplFunction
+-          -> GC -> XMonadFont -> p -> [String] -> XPConfig -> KeyMask -> XPState
+-initState d rw w s compl gc fonts pt h c nm =
++          -> GC -> XMonadFont -> p -> History -> [String] -> XPConfig -> KeyMask
++          -> (KeyStroke -> Event -> XP ()) -> (String -> X()) -> X () -> XPState
++initState d rw w s compl gc fonts pt h hs c nm st sa fa =
+     XPS { dpy                = d
+         , rootw              = rw
+         , win                = w
+hunk ./XMonad/Prompt.hs 252
+         , gcon               = gc
+         , fontS              = fonts
+         , xptype             = XPT pt
++        , history            = h
+         , commandHistory     = W.Stack { W.focus = defaultText c
+                                        , W.up    = []
+hunk ./XMonad/Prompt.hs 255
+-                                       , W.down  = h }
++                                       , W.down  = hs }
+         , offset             = length (defaultText c)
+         , config             = c
+         , successful         = False
+hunk ./XMonad/Prompt.hs 261
+         , done               = False
+         , numlockMask        = nm
++        , stepfn             = st
++        , sact               = sa
++        , fact               = fa
+         }
+ 
+ -- this would be much easier with functional references
+hunk ./XMonad/Prompt.hs 282
+ getInput :: XP String
+ getInput = gets command
+ 
+--- | Same as 'mkXPrompt', except that the action function can have
+---   type @String -> X a@, for any @a@, and the final action returned
+---   by 'mkXPromptWithReturn' will have type @X (Maybe a)@.  @Nothing@
+---   is yielded if the user cancels the prompt (by e.g. hitting Esc or
+---   Ctrl-G).  For an example of use, see the 'XMonad.Prompt.Input'
+---   module.
+-mkXPromptWithReturn :: XPrompt p => p -> XPConfig -> ComplFunction -> (String -> X a)  -> X (Maybe a)
+-mkXPromptWithReturn t conf compl action = do
+-  XConf { display = d, theRoot = rw } <- ask
+-  s    <- gets $ screenRect . W.screenDetail . W.current . windowset
+-  hist <- io readHistory
+-  w    <- io $ createWin d rw conf s
+-  io $ selectInput d w $ exposureMask .|. keyPressMask
+-  gc <- io $ createGC d w
+-  io $ setGraphicsExposures d gc False
+-  fs <- initXMF (font conf)
+-  numlock <- gets $ X.numberlockMask
+-  let hs = fromMaybe [] $ M.lookup (showXPrompt t) hist
+-      st = initState d rw w s compl gc fs (XPT t) hs conf numlock
+-  st' <- io $ execStateT runXP st
+-
+-  releaseXMF fs
+-  io $ freeGC d gc
+-  if successful st'
+-    then do
+-      let prune = take (historySize conf)
+-      io $ writeHistory $ M.insertWith
+-                                (\xs ys -> prune . historyFilter conf $ xs ++ ys)
+-                                (showXPrompt t)
+-                                (prune $ historyFilter conf [command st'])
+-                                hist
+-                                -- we need to apply historyFilter before as well, since
+-                                -- otherwise the filter would not be applied if
+-                                -- there is no history
+-      Just <$> action (command st')
+-    else return Nothing
+-
+ -- | Creates a prompt given:
+ --
+ -- * a prompt type, instance of the 'XPrompt' class.
+hunk ./XMonad/Prompt.hs 294
+ --
+ -- * an action to be run: the action must take a string and return 'XMonad.X' ()
+ mkXPrompt :: XPrompt p => p -> XPConfig -> ComplFunction -> (String -> X ()) -> X ()
+-mkXPrompt t conf compl action = mkXPromptWithReturn t conf compl action >> return ()
++mkXPrompt t conf compl action = mkXPromptWithFail t conf compl action (return ())
+ 
+hunk ./XMonad/Prompt.hs 296
+-runXP :: XP ()
+-runXP = do
+-  (d,w) <- gets (dpy &&& win)
+-  status <- io $ grabKeyboard d w True grabModeAsync grabModeAsync currentTime
+-  when (status == grabSuccess) $ do
+-          updateWindows
+-          eventLoop handle
+-          io $ ungrabKeyboard d currentTime
+-  io $ destroyWindow d w
+-  destroyComplWin
+-  io $ sync d False
++-- | Like mkXPrompt but allows the caller to specify a hook for when the
++-- prompt is not successful.
++mkXPromptWithFail :: XPrompt p => p -> XPConfig -> ComplFunction
++                  -> (String -> X ())
++                  -> X ()
++                  -> X ()
++mkXPromptWithFail t conf compl act af = do
++  XConf { display = d, theRoot = rw } <- ask
++  s    <- gets $ screenRect . W.screenDetail . W.current . windowset
++  hist <- io readHistory
++  w    <- io $ createWin d rw conf s
++  io $ selectInput d w $ exposureMask .|. keyPressMask
++  gc <- io $ createGC d w
++  io $ setGraphicsExposures d gc False
++  fs <- initXMF (font conf)
++  nl <- gets $ X.numberlockMask
++  let hs = fromMaybe [] $ M.lookup (showXPrompt t) hist
++      st = initState d rw w s compl gc fs (XPT t) hist hs conf nl handle act af
++
++  (PM m) <- XS.get
++  let m' = M.insert w st m
++  XS.put (PM m')
+ 
+ type KeyStroke = (KeySym, String)
+ 
+hunk ./XMonad/Prompt.hs 321
+-eventLoop :: (KeyStroke -> Event -> XP ()) -> XP ()
+-eventLoop action = do
+-  d <- gets dpy
+-  (keysym,string,event) <- io $
+-            allocaXEvent $ \e -> do
+-              maskEvent d (exposureMask .|. keyPressMask) e
+-              ev <- getEvent e
+-              (ks,s) <- if ev_event_type ev == keyPress
+-                        then lookupString $ asKeyEvent e
+-                        else return (Nothing, "")
+-              return (ks,s,ev)
+-  action (fromMaybe xK_VoidSymbol keysym,string) event
+-  gets done >>= flip unless (eventLoop handle)
++newtype PM = PM (M.Map Window XPState) deriving (Typeable)
++instance ExtensionClass PM where
++  initialValue = PM (M.empty) 
++  extensionType = StateExtension
++
++eventHandle :: EventHook
++eventHandle ep e = do
++  (PM m) <- XS.get
++  mw <- liftM W.peek $ gets windowset
++  case mw of
++    Nothing -> return () 
++    Just w -> case M.lookup w m of
++                Nothing -> return ()
++                Just s -> do
++                    ks <- liftM (first (fromMaybe xK_VoidSymbol)) $
++                                 if ev_event_type e == keyPress
++                                  then liftIO $ lookupString $ asKeyEvent ep
++                                  else return (Nothing, "")
++                    (f,s') <- io $ flip runStateT s $ do
++                                    a <- gets stepfn
++                                    a ks e
++                                    gets done
++                    if f
++                     then do
++                        XS.put$PM$M.delete w m
++                        let d = (dpy s')
++                        io $ destroyWindow d w
++                        io $ runStateT destroyComplWin s'
++                        io $ sync d False
++
++                        releaseXMF (fontS s')
++                        io $ freeGC d (gcon s')
++                        if successful s'
++                         then do
++                               let conf = config s'
++                               let prune = take (historySize conf)
++                               io $ writeHistory $ M.insertWith
++                                 (\xs ys -> prune . historyFilter conf $ xs ++ ys)
++                                 (showXPrompt$xptype s')
++                                 (prune $ historyFilter conf [command s'])
++                                 (history s')
++                                 -- we need to apply historyFilter before as well, since
++                                 -- otherwise the filter would not be applied if
++                                 -- there is no history
++                               sact s' (command s')
++                         else fact s'
++                     else
++                        XS.put$PM$M.insert w s' m
++  return$All True
+ 
+ -- | Removes numlock and capslock from a keymask.
+ -- Duplicate of cleanMask from core, but in the
+hunk ./XMonad/Prompt.hs 380
+   let highMasks = 1 `shiftL` 12 - 1
+   return (complement (numlock .|. lockMask) .&. msk .&. highMasks)
+ 
++
+ -- Main event handler
+hunk ./XMonad/Prompt.hs 382
+-handle :: KeyStroke -> Event -> XP ()
++handle :: (KeySym, String) -> Event -> StateT XPState IO ()
+ handle ks@(sym,_) e@(KeyEvent {ev_event_type = t, ev_state = m}) = do
+   complKey <- gets $ completionKey . config
+   c <- getCompletions
+hunk ./XMonad/Prompt.hs 407
+                     let new_command = nextCompletion (xptype st) (command st) l
+                     in modify $ \s -> setCommand new_command $ s { offset = length new_command }
+                 updateWins  l = redrawWindows l >>
+-                                eventLoop (completionHandle l)
++                                setStepFn (completionHandle l)
+             case c of
+hunk ./XMonad/Prompt.hs 409
+-              []  -> updateWindows   >> eventLoop handle
++              []  -> updateWindows   >> setStepFn handle
+               [x] -> updateState [x] >> getCompletions >>= updateWins
+               l   -> updateState l   >> updateWins l
+hunk ./XMonad/Prompt.hs 412
+-      | t == keyRelease && sym == complKey -> eventLoop (completionHandle c)
++      | t == keyRelease && sym == complKey -> setStepFn (completionHandle c)
+       | otherwise -> keyPressHandle m ks -- some other key, handle it normally
+ -- some other event: go back to main loop
+hunk ./XMonad/Prompt.hs 415
+-completionHandle _ k e = handle k e
++completionHandle _ _ _ = return ()
+ 
+ 
+ tryAutoComplete :: XP Bool
+hunk ./XMonad/Prompt.hs 475
+   case M.lookup (kmask,ks) km of
+     Just action -> action >> updateWindows
+     Nothing -> case str of
+-                 "" -> eventLoop handle
++                 "" -> setStepFn handle
+                  _ -> when (kmask .&. controlMask == 0) $ do
+                                  insertString (decodeString str)
+                                  updateWindows
+hunk ./XMonad/Prompt.hs 488
+ setDone :: Bool -> XP ()
+ setDone b = modify $ \s -> s { done = b }
+ 
++setStepFn :: (KeyStroke -> Event -> XP ()) -> XP ()
++setStepFn h = modify $ \s -> s { stepfn = h }
++
+ -- KeyPress and State
+ 
+ -- | Quit.
+hunk ./XMonad/Prompt/Email.hs 59
+ --   of addresses for autocompletion.
+ emailPrompt :: XPConfig -> [String] -> X ()
+ emailPrompt c addrs =
+-    inputPromptWithCompl c "To" (mkComplFunFromList addrs) ?+ \to ->
+-    inputPrompt c "Subject" ?+ \subj ->
+-    inputPrompt c "Body" ?+ \body ->
++    inputPromptWithCompl c "To" (mkComplFunFromList addrs) $ \to ->
++    inputPrompt c "Subject" $ \subj ->
++    inputPrompt c "Body" $ \body ->
+     runProcessWithInput "mail" ["-s", subj, to] (body ++ "\n")
+          >> return ()
+hunk ./XMonad/Prompt/Input.hs 21
+                             -- $usage
+                             inputPrompt,
+                             inputPromptWithCompl,
+-                            (?+),
+                             InputPrompt,
+                            ) where
+ 
+hunk ./XMonad/Prompt/Input.hs 47
+ -- just wants a convenient way to provide the input for this function
+ -- from within xmonad.  Here is where the "XMonad.Prompt.Input" module
+ -- comes into play.  He can use the 'inputPrompt' function to create a
+--- prompt, and the '?+' operator to compose the prompt with the
+--- @fireEmployee@ action, like so:
++-- prompt around the @fireEmployee@ action, like so:
+ --
+ -- > firingPrompt :: X ()
+hunk ./XMonad/Prompt/Input.hs 50
+--- > firingPrompt = inputPrompt defaultXPConfig \"Fire\" ?+ fireEmployee
++-- > firingPrompt = inputPrompt defaultXPConfig \"Fire\" fireEmployee
+ --
+ -- If @employees@ contains a list of all his employees, he could also
+ -- create an autocompleting version, like this:
+hunk ./XMonad/Prompt/Input.hs 56
+ --
+ -- > firingPrompt' = inputPromptWithCompl defaultXPConfig \"Fire\"
+--- >                     (mkComplFunFromList employees) ?+ fireEmployee
++-- >                     (mkComplFunFromList employees) fireEmployee
+ --
+ -- Now all he has to do is add a keybinding to @firingPrompt@ (or
+ -- @firingPrompt'@), such as
+hunk ./XMonad/Prompt/Input.hs 89
+ --   (Maybe String)@, which reflects the fact that the user might
+ --   cancel the prompt (resulting in @Nothing@), or enter an input
+ --   string @s@ (resulting in @Just s@).
+-inputPrompt :: XPConfig -> String -> X (Maybe String)
++inputPrompt :: XPConfig -> String -> (String -> X ()) -> X () 
+ inputPrompt c p = inputPromptWithCompl c p (const (return []))
+ 
+ -- | The same as 'inputPrompt', but with a completion function.  The
+hunk ./XMonad/Prompt/Input.hs 97
+ --   "XMonad.Prompt".  The 'mkComplFunFromList' utility function, also
+ --   defined in "XMonad.Prompt", is useful for creating such a
+ --   function from a known list of possibilities.
+-inputPromptWithCompl :: XPConfig -> String -> ComplFunction -> X (Maybe String)
+-inputPromptWithCompl c p compl = mkXPromptWithReturn (InputPrompt p) c compl return
+-
++inputPromptWithCompl :: XPConfig -> String -> ComplFunction -> (String -> X ()) -> X ()
++inputPromptWithCompl c p compl = mkXPrompt (InputPrompt p) c compl
+ 
+hunk ./XMonad/Prompt/Input.hs 100
++{-
+ infixr 1 ?+
+ 
+ -- | A combinator for hooking up an input prompt action to a function
+hunk ./XMonad/Prompt/Input.hs 114
+ --   want to move it to a different module, be my guest.
+ (?+) :: (Monad m) => m (Maybe a) -> (a -> m ()) -> m ()
+ x ?+ k = x >>= maybe (return ()) k
++-}
++
+}
+[Export adjustUrgents from XMonad.Hooks.UrgencyHook
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118193013
+ Ignore-this: 21404628542c8c9dbac34fd485e3a3c2
+] hunk ./XMonad/Hooks/UrgencyHook.hs 70
+                                  SpawnUrgencyHook(..),
+                                  UrgencyHook(urgencyHook),
+                                  Interval,
++                                 adjustUrgents
+                                  ) where
+ 
+ import XMonad
 
 Context:
 
+[Export types to reduce haddock warnings.
+Adam Vogt <vogt.adam@gmail.com>**20101023195755
+ Ignore-this: 1cac9202784711ce0fc902d14543bab0
+] 
+[Be consistent with core utf8-string usage.
+Adam Vogt <vogt.adam@gmail.com>**20111118184745
+ Ignore-this: 9de0599d0fb888c58e11598d4de9599e
+ 
+ Now that spawn assumes executeFile takes a String containing utf8 codepoints
+ (and takes an actual String as input) adjust Prompt.Shell to avoid double
+ encoding. U.Run functions are updated to be consistent with spawn.
+] 
+[Export types to improve haddock links.
+Adam Vogt <vogt.adam@gmail.com>**20111118190642
+ Ignore-this: 254c5a6941009701dc444043b0eeace5
+] 
+[Better control over GridVariants geometry
+nzeh@cs.dal.ca**20110907133304
+ Ignore-this: 59da789a28f702595159eeb6ddd30fd9
+ 
+ Added new messages the layout understands to allow changing the grid aspect
+ ratio and setting the fraction of the master to a given value rather than
+ changing it relative to the current value.
+] 
+[Support for scratchpad applications with multiple windows
+Norbert Zeh <nzeh@cs.dal.ca>**20110406140213
+ Ignore-this: 4c7d5f2ff95292438464e0b1060ab324
+ 
+ I recently found that I use xpad to add sticky notes to my desktop.  I wanted
+ to be able to show/hide these in the same fashion as regular scratchpads.  This
+ patch adds a function that allows to do this while reusing most of the existing
+ NamedScratchpad code.
+] 
+[Additional messages for SplitGrid layout
+Norbert Zeh <nzeh@cs.dal.ca>**20091215192142
+ Ignore-this: eb945168d1c420e5a9ed87da12a7acf8
+ 
+ This patch introduces two new message SetMasterRows and SetMasterCols for the
+ X.GridVariants.SplitGrid layout, which set the number of rows/columns in the
+ master grid to the given value.  This is useful when setting the number of rows
+ and/or columns non-incrementally using an interface such as GridSelect.
+] 
+[documentation patch: note the drawbacks of X.U.Dmenu
+Daniel Wagner <daniel@wagner-home.com>**20111115022726
+ Ignore-this: 97f9676ca075a6f96e090045886083ca
+] 
+[get ready for GHC 7.4: Num a no longer implies (Eq a, Show a)
+Daniel Wagner <daniel@wagner-home.com>**20111115022650
+ Ignore-this: faa34d69ddd27b98c6507740b42c9e97
+] 
+[Correct completions of utf8-named file in X.P.Shell
+Adam Vogt <vogt.adam@gmail.com>**20111111215655
+ Ignore-this: 9aa10143f313b06afdb11e61777a7d20
+] 
+[Expose X.L.Groups.Helpers and Groups.Wmii in xmonad-contrib.cabal
+Wirt Wolff <wirtwolff@gmail.com>**20111104053703
+ Ignore-this: fd50e32f61af64b9e53701787cebcd97
+ 
+ They provide many useful exports and are linked from X.L.Groups so promote
+ them from other-modules or missing status.
+] 
+[Small bugfix to XMonad.Layout.Fullscreen
+Audun Skaugen <audun@skaugen.name>**20111023102940
+ Ignore-this: adcfedf11b40be2cdd61f615551e0ae
+ 
+ Fixed a small bug in the layout modifers where 
+ windows entering fullscreen were not refreshed.
+ 
+ Also fixed some funny whitespace characters.
+] 
+[documentation patch: add a bit more context to the code snippets in X.L.IndependentScreens
+Daniel Wagner <daniel@wagner-home.com>**20111011204619
+ Ignore-this: cbb03927204aa3c01aa9bea067d37bce
+] 
+[U.EZConfig allow removing more than one mouse binding.
+Adam Vogt <vogt.adam@gmail.com>**20110923123907
+ Ignore-this: 6f32ef805566f03977ea5c0fe0ace958
+] 
+[Remove X.A.GroupNavigation.currentWindow
+Norbert Zeh <nzeh@cs.dal.ca>**20110920083922
+ Ignore-this: 4b202a9c9e3a13c5e34862784ea4acfa
+ 
+ This function does the same as X.StackSet.peek and all its uses have been
+ replaced with X.StackSet.peek.
+] 
+[Fix typo in NoBorders example code.
+Adam Vogt <vogt.adam@gmail.com>**20110814195314
+ Ignore-this: 3ad6aaf287962bfce707b2324de91eec
+] 
 [Add XF86TouchpadToggle to the list of multimedia keys in X.U.EZConfig
 Daniel Schoepe <daniel.schoepe@googlemail.com>**20110917151419
  Ignore-this: 84986d5b16c54199a589ed68842f5191
@@ -1797,4 +2419,4 @@ Spencer Janssen <spencerjanssen@gmail.com>**20091026013449
  Ignore-this: 542b6105d6deed65e12d1f91c666b0b2
 ] 
 Patch bundle hash:
-36be431d950b6e41a1b0d78eaa0daef97f28361c
+50d0a94eb921cc91b6e19bf34357a26e113731da

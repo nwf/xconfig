@@ -1,12 +1,15 @@
-3 patches for repository http://code.haskell.org/xmonad:
+4 patches for repository http://code.haskell.org/xmonad:
 
 Wed Nov  3 19:31:28 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add shutdownHook configuration callback
 
-Wed Nov  3 19:37:06 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+Tue Nov 15 17:52:45 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+  * Export the native X11 Event as well as its parsed form to event handlers
+
+Fri Nov 18 14:34:43 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Make xmonad work when it isn't on $PATH
 
-Wed Nov  3 19:39:31 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
+Fri Nov 18 14:35:10 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add a messageHook to the configuration
 
 New patches:
@@ -56,7 +59,7 @@ hunk ./XMonad/Config.hs 208
      -- quit, or restart
 -    , ((modMask .|. shiftMask, xK_q     ), io (exitWith ExitSuccess)) -- %! Quit xmonad
 +    , ((modMask .|. shiftMask, xK_q     ), exit $ Just ExitSuccess ) -- %! Quit xmonad
-     , ((modMask              , xK_q     ), spawn "xmonad --recompile && xmonad --restart") -- %! Restart xmonad
+     , ((modMask              , xK_q     ), spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
      ]
      ++
 hunk ./XMonad/Config.hs 251
@@ -67,7 +70,7 @@ hunk ./XMonad/Config.hs 251
      , XMonad.mouseBindings      = mouseBindings
      , XMonad.manageHook         = manageHook
      , XMonad.handleEventHook    = handleEventHook
-hunk ./XMonad/Core.hs 109
+hunk ./XMonad/Core.hs 110
      , borderWidth        :: !Dimension           -- ^ The border width
      , logHook            :: !(X ())              -- ^ The action to perform when the windows set is changed
      , startupHook        :: !(X ())              -- ^ The action to perform on startup
@@ -119,9 +122,106 @@ hunk ./man/xmonad.hs 122
      -- Restart xmonad
      , ((modm              , xK_q     ), spawn "xmonad --recompile; xmonad --restart")
 }
+[Export the native X11 Event as well as its parsed form to event handlers
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111115225245
+ Ignore-this: 93b569e9c449d96ae117de79f598a847
+] {
+hunk ./XMonad/Config.hs 45
+ import qualified Data.Map as M
+ import System.Exit(ExitCode(ExitSuccess))
+ import Graphics.X11.Xlib
+-import Graphics.X11.Xlib.Extras
+ 
+ -- | The default number of workspaces (virtual screens) and their names.
+ -- By default we use numeric strings, but any string may be used as a
+hunk ./XMonad/Config.hs 115
+ -- | Defines a custom handler function for X Events. The function should
+ -- return (All True) if the default handler is to be run afterwards.
+ -- To combine event hooks, use mappend or mconcat from Data.Monoid.
+-handleEventHook :: Event -> X All
+-handleEventHook _ = return (All True)
++handleEventHook :: EventHook
++handleEventHook _ _ = return (All True)
+ 
+ -- | Perform an arbitrary action at xmonad startup.
+ startupHook :: X ()
+hunk ./XMonad/Core.hs 29
+     runX, catchX, userCode, userCodeDef, io, catchIO, installSignalHandlers, uninstallSignalHandlers,
+     withDisplay, withWindowSet, isRoot, runOnWorkspaces,
+     getAtom, spawn, spawnPID, xfork, getXMonadDir, recompile, trace, whenJust, whenX,
+-    atom_WM_STATE, atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, ManageHook, Query(..), runQuery
++    atom_WM_STATE, atom_WM_PROTOCOLS, atom_WM_DELETE_WINDOW, ManageHook, Query(..), runQuery,
++    EventHook
+   ) where
+ 
+ import XMonad.StackSet hiding (modify)
+hunk ./XMonad/Core.hs 41
+ import Control.Applicative
+ import Control.Monad.State
+ import Control.Monad.Reader
++import Foreign.Ptr (Ptr)
+ import System.FilePath
+ import System.IO
+ import System.Info
+hunk ./XMonad/Core.hs 100
+     , terminal           :: !String              -- ^ The preferred terminal application. Default: \"xterm\"
+     , layoutHook         :: !(l Window)          -- ^ The available layouts
+     , manageHook         :: !ManageHook          -- ^ The action to run when a new window is opened
+-    , handleEventHook    :: !(Event -> X All)    -- ^ Handle an X event, returns (All True) if the default handler
++    , handleEventHook    :: !EventHook           -- ^ Handle an X event, returns (All True) if the default handler
+                                                  -- should also be run afterwards. mappend should be used for combining
+                                                  -- event hooks in most cases.
+     , workspaces         :: ![String]            -- ^ The list of workspaces' names
+hunk ./XMonad/Core.hs 161
+     mempty  = return mempty
+     mappend = liftM2 mappend
+ 
++type EventHook = Ptr XEvent -> Event -> X All
++
+ -- | Run the 'X' monad, given a chunk of 'X' monad code, and an initial state
+ -- Return the result, and final state
+ runX :: XConf -> XState -> X a -> IO (a, XState)
+hunk ./XMonad/Main.hsc 158
+             userCode $ startupHook initxmc
+ 
+             -- main loop, for all you HOF/recursion fans out there.
+-            forever $ prehandle =<< io (nextEvent dpy e >> getEvent e)
++            forever $ prehandle e =<< io (nextEvent dpy e >> getEvent e)
+ 
+     return ()
+       where
+hunk ./XMonad/Main.hsc 163
+         -- if the event gives us the position of the pointer, set mousePosition
+-        prehandle e = let mouse = do guard (ev_event_type e `elem` evs)
+-                                     return (fromIntegral (ev_x_root e)
+-                                            ,fromIntegral (ev_y_root e))
+-                      in local (\c -> c { mousePosition = mouse }) (handleWithHook e)
++        prehandle ep e = let mouse = do guard (ev_event_type e `elem` evs)
++                                        return (fromIntegral (ev_x_root e)
++                                               ,fromIntegral (ev_y_root e))
++                         in local (\c -> c { mousePosition = mouse }) (handleWithHook ep e)
+         evs = [ keyPress, keyRelease, enterNotify, leaveNotify
+               , buttonPress, buttonRelease]
+ 
+hunk ./XMonad/Main.hsc 173
+ 
+ -- | Runs handleEventHook from the configuration and runs the default handler
+ -- function if it returned True.
+-handleWithHook :: Event -> X ()
+-handleWithHook e = do
++handleWithHook :: Ptr XEvent -> Event -> X ()
++handleWithHook ep e = do
+   evHook <- asks (handleEventHook . config)
+hunk ./XMonad/Main.hsc 176
+-  whenX (userCodeDef True $ getAll `fmap` evHook e) (handle e)
++  whenX (userCodeDef True $ getAll `fmap` evHook ep e) (handle e)
+ 
+ -- ---------------------------------------------------------------------
+ -- | Event handler. Map X events onto calls into Operations.hs, which
+}
 [Make xmonad work when it isn't on $PATH
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103233706
- Ignore-this: 67c9e7b237802f36bd99cc88b902e4a8
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118193443
+ Ignore-this: 4073425e42140b45f2ad0b785a2061ca
 ] {
 hunk ./XMonad/Config.hs 40
  import XMonad.Operations
@@ -136,13 +236,13 @@ hunk ./XMonad/Config.hs 46
  import System.Exit(ExitCode(ExitSuccess))
 +import System.FilePath(pathSeparator)
  import Graphics.X11.Xlib
- import Graphics.X11.Xlib.Extras
  
-hunk ./XMonad/Config.hs 212
+ -- | The default number of workspaces (virtual screens) and their names.
+hunk ./XMonad/Config.hs 211
  
      -- quit, or restart
      , ((modMask .|. shiftMask, xK_q     ), exit $ Just ExitSuccess ) -- %! Quit xmonad
--    , ((modMask              , xK_q     ), spawn "xmonad --recompile && xmonad --restart") -- %! Restart xmonad
+-    , ((modMask              , xK_q     ), spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
 +    , ((modMask              , xK_q     ), do 
 +        xm <- io $ liftM (++[pathSeparator]++"xmonad") getBinDir
 +        spawn $ xm ++ " --recompile && " ++ xm ++ " --restart" ) -- %! Restart xmonad
@@ -184,7 +284,7 @@ hunk ./xmonad.cabal 44
  
      if flag(small_base)
          build-depends: base < 5 && >=3, containers, directory, process, filepath, extensible-exceptions
-hunk ./xmonad.cabal 74
+hunk ./xmonad.cabal 75
                          XMonad.ManageHook
                          XMonad.Operations
                          XMonad.StackSet
@@ -194,8 +294,8 @@ hunk ./xmonad.cabal 74
          ghc-options:    -funbox-strict-fields -Wall
 }
 [Add a messageHook to the configuration
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103233931
- Ignore-this: 51a6f96ba956b38c434aef47f7534133
+Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118193510
+ Ignore-this: 5436b61db2253b9e127744c4c759335b
 ] {
 hunk ./XMonad/Config.hs 30
  import XMonad.Core as XMonad hiding
@@ -218,9 +318,9 @@ hunk ./XMonad/Config.hs 47
  import System.FilePath(pathSeparator)
 +import System.Posix.Process (executeFile, forkProcess)
  import Graphics.X11.Xlib
- import Graphics.X11.Xlib.Extras
  
-hunk ./XMonad/Config.hs 114
+ -- | The default number of workspaces (virtual screens) and their names.
+hunk ./XMonad/Config.hs 113
  logHook :: X ()
  logHook = return ()
  
@@ -233,7 +333,7 @@ hunk ./XMonad/Config.hs 114
  ------------------------------------------------------------------------
  -- Event handling
  
-hunk ./XMonad/Config.hs 262
+hunk ./XMonad/Config.hs 261
      , XMonad.modMask            = defaultModMask
      , XMonad.keys               = keys
      , XMonad.logHook            = logHook
@@ -241,7 +341,7 @@ hunk ./XMonad/Config.hs 262
      , XMonad.startupHook        = startupHook
      , XMonad.shutdownHook       = shutdownHook
      , XMonad.mouseBindings      = mouseBindings
-hunk ./XMonad/Core.hs 108
+hunk ./XMonad/Core.hs 111
                                                   -- ^ The mouse bindings
      , borderWidth        :: !Dimension           -- ^ The border width
      , logHook            :: !(X ())              -- ^ The action to perform when the windows set is changed
@@ -253,6 +353,35 @@ hunk ./XMonad/Core.hs 108
 
 Context:
 
+[Correct recompile keybinding (issue 126)
+Adam Vogt <vogt.adam@gmail.com>**20111117042522
+ Ignore-this: e27d6d60a16788192c0bb0399a597fb3
+ 
+ Thanks reenberg for pointing out the previous patch incorrectly warns about a
+ missing xmonad when the config has an error.
+ 
+ Also changed is "type" which as a shell builtin is more likely to exist than
+ "which".
+] 
+[Warn with xmessage when xmonad cannot be found for recompile (issue 126)
+Adam Vogt <vogt.adam@gmail.com>**20100330003310
+ Ignore-this: f77e1ba4fdb2c15635be379d6e5f58e9
+] 
+[Assume locale is utf8 for spawn.
+Adam Vogt <vogt.adam@gmail.com>**20111118182920
+ Ignore-this: ea27391896e898f1288764ea40bc9661
+ 
+ This adds the utf8-string dependency so that users no longer need to encode
+ strings they (possibly indirectly) pass to spawn. This is the expected
+ behavior, since each Char in String should be an actual character.
+ 
+ For systems that do not use utf8 this does not help. Fixing this by using iconv
+ or similar libraries may be done later.
+] 
+[change the default mod+p binding to keep up with changes to dmenu
+Daniel Wagner <daniel@wagner-home.com>**20111013162509
+ Ignore-this: e3859ef530c04cb6c2c9bfec5cc412e1
+] 
 [recognize the --replace option
 Daniel Wagner <daniel@wagner-home.com>**20110809195250
  Ignore-this: 144ecf69bf57464f0de5a68837142190
@@ -508,4 +637,4 @@ Spencer Janssen <spencerjanssen@gmail.com>**20091026004641
  Ignore-this: 80347d432f3b606c8d722536d0d729aa
 ] 
 Patch bundle hash:
-624f3dbf08e2c3a9f78f257b1bbadb853b228573
+f68c41333d8d0e658014f967e4ddb9ece88e4210
