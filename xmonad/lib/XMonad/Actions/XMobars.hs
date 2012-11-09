@@ -29,8 +29,8 @@ import qualified Data.IntMap as IM
 import Data.List (find, stripPrefix)
 import qualified Data.Map as M
 import Data.Maybe (fromJust)
-import Data.Monoid (All(All))
-import System.IO (Handle, hClose, hPutStrLn, stderr)
+import Data.Monoid (All(..))
+import System.IO (Handle, hClose, hPutStrLn) -- stderr
 import System.Posix.Signals (signalProcess, keyboardSignal)
 import System.Posix.Types (ProcessID)
 
@@ -67,7 +67,7 @@ instance Read XMobars where
 
 killxmobar :: Bool -> XMobars -> ScreenId -> IO XMobars
 killxmobar dokill xmbs (S ix) = do
-  io $ hPutStrLn stderr $ "killxmobar " ++ (show dokill) ++ " " ++ (show ix)
+  -- io $ hPutStrLn stderr $ "killxmobar " ++ (show dokill) ++ " " ++ (show ix)
   case IM.lookup ix (xmScreenState xmbs) of
     Nothing -> return xmbs
     Just (h, pid) -> do
@@ -85,7 +85,7 @@ killxmobar dokill xmbs (S ix) = do
 updatexmobar :: XMobars -> ScreenId -> IO XMobars
 updatexmobar xmbs (S ix) = do
    let mcfg = IM.lookup ix (xmScreenIntent xmbs)
-   io $ hPutStrLn stderr $ "updatexmobar " ++ (show ix) ++ " " ++ (show mcfg)
+   -- io $ hPutStrLn stderr $ "updatexmobar " ++ (show ix) ++ " " ++ (show mcfg)
    case mcfg of
      Just (Just cfg) -> case IM.lookup ix (xmScreenState xmbs) of
        Nothing -> do
@@ -101,11 +101,11 @@ updatexmobar xmbs (S ix) = do
 updatexmobars_ :: XMobars -> X XMobars
 updatexmobars_ xmbs = do
   screencount <- LIS.countScreens
-  io $ hPutStrLn stderr $ "updatexmobar " ++ (show screencount) ++ ":" ++ (show xmbs)
+  -- io $ hPutStrLn stderr $ "updatexmobar " ++ (show screencount) ++ ":" ++ (show xmbs)
   let (_, mkill, okill) = IM.splitLookup screencount (xmScreenState xmbs)
   let kills = maybe (id) (:) mkill (IM.elems okill)
 
-  io $ hPutStrLn stderr $ "updatexmobar killing " ++ (show kills)
+  -- io $ hPutStrLn stderr $ "updatexmobar killing " ++ (show kills)
 
   mapM_ (\(h,p) -> io $ killpid p >> hClose h) kills
   let sk = map snd kills
@@ -136,7 +136,7 @@ ensureanxmobar s c = UE.put =<< return . ensureanxmobar_ s c =<< UE.get
 
 toggleanxmobar :: ScreenId -> X ()
 toggleanxmobar (S scr) = do
-  io $ hPutStrLn stderr $ "toggleanxmobar " ++ (show scr)
+  -- io $ hPutStrLn stderr $ "toggleanxmobar " ++ (show scr)
   xmbs <- UE.get
   let nmcfg = case IM.lookup scr (xmScreenIntent xmbs) of
                 Just (Just _) -> Nothing
@@ -164,12 +164,12 @@ xmobarLH = do
      UE.get >>= IM.foldWithKey (\s (h,_) a -> a >>
             HDL.dynamicLogWithPP (base
             { HDL.ppOutput = hPutStrLn h
-            , HDL.ppTitle = HDL.xmobarColor "green" "" . HDL.shorten 40
-            , HDL.ppLayout = \s -> maybe s id $ stripPrefix "Hinted " s
-            , HDL.ppCurrent = if (S s) /= S.screen (S.current ws)
-                  then \w -> HDL.xmobarColor "yellow" "" $
-                       HDL.wrap "{" "}" w
-                  else HDL.ppCurrent base
+            , HDL.ppTitle = HDL.xmobarColor "goldenrod" "" . HDL.shorten 40
+            , HDL.ppLayout = \n -> maybe n id $ stripPrefix "Hinted " n
+            , HDL.ppCurrent = HDL.xmobarColor "blue" "" .
+                 if (S s) /= S.screen (S.current ws)
+                  then HDL.wrap "{" "}"
+                  else HDL.wrap "[" "]"
             , HDL.ppVisible = \w ->
                       -- fromJust safe here since ppVisible called only for
                       -- `elem` (map (S.tag . S.workspace) (S.visible ws))
@@ -178,13 +178,14 @@ xmobarLH = do
                   in if (S s) == S.screen scr
                       then HDL.wrap "<" ">" w
                       else HDL.ppVisible base w
+            , HDL.ppUrgent = HDL.xmobarColor "darkgoldenrod" "green" 
             }))
         (return ()) . (xmScreenState)
  where base = HDL.xmobarPP
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------ Event hook {{{
-xmobarEH :: Event -> X All
+-- xmobarEH :: EventHook
 xmobarEH (ConfigureEvent {ev_window = w}) = do
   whenX (isRoot w) updatexmobars
 {-
@@ -196,7 +197,7 @@ xmobarEH (ConfigureEvent {ev_window = w}) = do
                               (0,0,0) rs
       ...
 -}
-  return (All True)
+  return$All True
 xmobarEH (MapNotifyEvent {ev_window = w}) = do
     xmbs <- UE.get
     when (not $ M.null $ xmPidScreen xmbs) $ do
@@ -208,7 +209,7 @@ xmobarEH (MapNotifyEvent {ev_window = w}) = do
           case M.lookup (fromIntegral pid) $ xmPidScreen xmbs of
             Nothing -> return ()
             Just (S scr) -> do
-              io $ hPutStrLn stderr $ "XMB: " ++ (show pids) ++ "@" ++ (show w)
+              -- io $ hPutStrLn stderr $ "XMB: " ++ (show pids) ++ "@" ++ (show w)
               let ws' = M.insert w (S scr) $ xmWinScreen xmbs
               let sw' = IM.insert scr w $ xmScreenWin xmbs
               let ps' = M.delete (fromIntegral pid) $ xmPidScreen xmbs
@@ -216,17 +217,16 @@ xmobarEH (MapNotifyEvent {ev_window = w}) = do
                             , xmWinScreen = ws'
                             , xmScreenWin = sw'
                             }
-    return (All True)
+    return$All True
 xmobarEH (DestroyWindowEvent {ev_window = w}) = do
     xmbs <- UE.get
     case M.lookup w (xmWinScreen xmbs) of
       Nothing -> return ()
       Just scr -> do
-        io $ hPutStrLn stderr $ "xmobar death: " ++ (show scr)
+        -- io $ hPutStrLn stderr $ "xmobar death: " ++ (show scr)
         liftIO (killxmobar False xmbs scr) >>= UE.put
-    return (All True)
-xmobarEH _ = return (All True)
-
+    return$All True
+xmobarEH _ = return$All True
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------------------- Utils {{{
 killpid :: MonadIO m => ProcessID -> m ()
