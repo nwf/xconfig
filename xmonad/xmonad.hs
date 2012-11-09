@@ -23,12 +23,17 @@ import qualified XMonad.Actions.WithAll as AWA
 import qualified XMonad.Actions.XMobars as AXB
 import qualified XMonad.Hooks.ManageDocks as HMD
 import qualified XMonad.Hooks.ManageHelpers as HMH
+import           XMonad.Hooks.ManageHelpers ( (-?>) )
+import qualified XMonad.Hooks.MiniEwmh as HME
+import qualified XMonad.Hooks.SetWMName as HSW
 import qualified XMonad.Hooks.UrgencyHook as HUH
 import qualified XMonad.Layout as L
 import qualified XMonad.Layout.IndependentScreens as LIS
+import qualified XMonad.Layout.IM as LIM
 import qualified XMonad.Layout.LayoutHints as LLH
 import qualified XMonad.Layout.MultiColumns as LMC
 import qualified XMonad.Layout.PerWorkspace as LPW
+import qualified XMonad.Layout.Reflect as LR
 import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Layout.SLS as LS 
 import qualified XMonad.Prompt as P
@@ -37,20 +42,21 @@ import qualified XMonad.Prompt.Eval as PE
 import qualified XMonad.Prompt.Window as PW
 import qualified XMonad.StackSet as S
 import qualified XMonad.Util.Cursor as UC
-import qualified XMonad.Util.ExtensibleState as UE
+-- import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.EZConfig as EZC
 import qualified XMonad.Util.WindowProperties as UW
 
 
-import Control.Monad (ap,liftM2,when)
-import Data.Maybe (isNothing)
+import Control.Applicative ((<$>))
+import Control.Monad (ap,when) -- liftM2
+import Data.Maybe (fromJust, isNothing)
 import qualified Data.Map as M
-import Data.List (find, isPrefixOf, stripPrefix)
-import Data.Monoid (All(All),mappend)
+import Data.List (find, isPrefixOf) -- stripPrefix
+import Data.Monoid (All(All), mappend)
 import Data.Ratio ((%))
 -- import qualified Language.Haskell.TH as TH
 -- import System.FilePath ((</>))
-import System.IO (hPutStrLn, stderr)
+-- import System.IO (hPutStrLn, stderr)
 -- import System.Posix.Directory (getWorkingDirectory)
 -- import System.Posix.Process (getProcessStatus, ProcessStatus(..))
 import System.Posix.Signals (signalProcess, keyboardSignal)
@@ -94,49 +100,58 @@ wkM = "m"   -- "media"
 wkP = "p"   -- "presentation"
 
 -- These lists get used inside Keyboard handling and Main.
-privworkspaces,deflworkspaces :: [String]
+privworkspaces,deflworkspaces,addlworkspaces :: [String]
 privworkspaces = [wkC,wkW,wkD,wkM,wkP]
 deflworkspaces = map show [(1::Int)..9]
 addlworkspaces = map (("A" ++) . show) [(1::Int)..9]
 
 -- | Find an empty "default" or "additional" workspace.
-findEmptyNumWorkspace :: S.StackSet String l a s sd
-                      -> Maybe (S.Workspace String l a)
-findEmptyNumWorkspace = find (isNothing . S.stack)
-                      . filter (flip elem (deflworkspaces
-                                        ++ addlworkspaces) . S.tag)
-                      . S.workspaces
+findEmptyNumWorkspaceTag :: S.StackSet String l a s sd
+                         -> String
+findEmptyNumWorkspaceTag ss = maybe (last searchset)
+                                 (S.tag)
+                         $ find (isNothing . S.stack)
+                         $ filter (flip elem searchset . S.tag)
+                         $ S.workspaces ss
+ where
+  searchset = deflworkspaces ++ addlworkspaces
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------- Management hook {{{
 
--- isKDEOverride = do
---    isover <- HMH.isInProperty "_NET_WM_WINDOW_TYPE" "_KDE_NET_WM_WINDOW_TYPE_OVERRIDE"
---    isfs <- HMH.isFullscreen
---    return $! isover && (not isfs)
+isKDEOverride = HMH.isInProperty "_NET_WM_WINDOW_TYPE" "_KDE_NET_WM_WINDOW_TYPE_OVERRIDE"
 
+-- | Work around X11 being "mechanism and no policy" by trying to induce a
+-- policy.  Of course, if clients had to ask a capability for a new window
+-- capability, this would be much easier and we'd not be at the mercy of
+-- applications behaving correctly.  Le sigh.
 myManageHook :: ManageHook
-myManageHook = composeAll . concat $
-    [ [ className   =? c           --> doFloat | c <- myClassFloats]
-    , [ title       =? t           --> doFloat | t <- myTitleFloats]
-    , [ className   =? "Iceweasel" --> doF (S.shift wkW) ]
-    , [ className   =? "Chromium"  --> doF (S.shift wkW) ]
-    , [ okularWin                  --> doF (S.shift wkD) ]
-    , [ okularPresent              --> doF (S.shift wkP) ]
-    , [ HMH.composeOne [ HMH.isFullscreen HMH.-?> HMH.doFullFloat ] ]
-    -- , [ HMH.composeOne [ isKDEOverride HMH.-?> doFloat ] ]
-    ]
- where
-    -- This grabs only Okular root windows, not any dialogs they throw
-    -- up.  Since I occasionally move Okulars to other workspaces, this
-    -- is handy.
-   okularWin     = UW.propertyToQuery $
-     (UW.ClassName "Okular") `UW.And` (UW.Role "okular::Shell")
-   okularPresent = UW.propertyToQuery $
-     (UW.ClassName "Okular") `UW.And` (UW.Role "presentationWidget")
-   -- icedlq        = UW.propertyToQuery $ UW.Role "Manager"
-   myClassFloats = ["XVkbd", "Xmessage"]
+myManageHook = composeAll $ [shift, float]
+     where
+   myClassFloats = ["XVkbd", "Xmessage", "MPlayer"]
    myTitleFloats = ["KCharSelect"]
+   
+   shift = HMH.composeOne $
+        [ HMH.transience
+        , className   =? "Iceweasel" -?> doF (S.shift wkW)
+        , className   =? "Chromium"  -?> doF (S.shift wkW)
+        , className   =? "Okular"    -?>
+            HMH.composeOne $ [
+                -- Apparently Okular no longer sets this.  Boo.
+                -- UW.propertyToQuery (UW.Role "presentationWidget") -?> doF (S.shift wkP)
+                isKDEOverride -?> doF (S.shift wkP)
+            ,   Just <$> doF (S.shift wkD)
+            ]
+        ]
+
+   float = HMH.composeOne $ concat
+    [ [ HMH.isDialog               -?> doFloat ]
+    , [ HMH.isFullscreen           -?> HMH.doFullFloat ]
+    , [ className   =? c           -?> doFloat | c <- myClassFloats ]
+    , [ title       =? t           -?> doFloat | t <- myTitleFloats ]
+    , [ ("ImageMagick:" `isPrefixOf`) <$> title -?> doFloat ]
+    ]
+
 
 ----------------------------------------------------------------------- }}}
 --------------------------------------------- Action.Eval configuration {{{
@@ -198,8 +213,6 @@ addKeys (XConfig {modMask = modm}) =
     , ((modm, xK_b), smhmdts)
         -- mod-shift-c %! Use CW.kill1 by default.
     , ((modm .|. shiftMask, xK_c     ), CW.kill1)
-        -- mod-B %! Toggle xmobar
-    , ((modm .|. shiftMask, xK_b ), AXB.togglemyxmobar )
         -- mod-f %! Pull up Bring menu
     , ((modm, xK_f    ), PW.windowPromptBring P.amberXPConfig)
         -- mod-g %! Pull up Goto menu
@@ -209,6 +222,7 @@ addKeys (XConfig {modMask = modm}) =
         -- mod-T %! Sink everything on the current desktop
     , ((modm .|. shiftMask, xK_t), AWA.sinkAll)
         -- XF86ScreenSaver %! Lock the screen
+        --   (that funny-looking number comes from X11/XF86keysym.h)
         -- mod-x %! Lock the screen
     , ((0, 0x1008ff2d ), xsl)
     , ((modm, xK_x    ), xsl)
@@ -225,13 +239,22 @@ addKeys (XConfig {modMask = modm}) =
         , ((0, xK_f), spawn "firefox --no-remote -P default")
         , ((shiftMask, xK_f), spawn "firefox --no-remote -P Flash")
         , ((0, xK_g), spawn "chromium")
+        , ((0, xK_h), asks (terminal . config) >>= \t -> spawn $ t ++ " -e ghci")
+        , ((0, xK_m), AXB.togglemyxmobar)
         , ((0, xK_r), spawn "gmrun")
+        , ((0, xK_v), spawn "gvim")
         , ((0, xK_w), asks (terminal . config) >>= \t -> spawn $ t ++ " -e wicd-curses")
+        , ((0, xK_z), asks (terminal . config) >>= \t -> spawn t)
         ])
-        -- mod-\ %! Switch to an unused numeric workspace, or "9" if none.
-    , ((modm, xK_backslash), windows $ \ss -> flip S.greedyView ss $
-                                 maybe ("9") S.tag
-                                     $ findEmptyNumWorkspace ss)
+        -- mod-\ %! Switch to an unused numeric workspace
+    , ((modm, xK_backslash),
+         windows $ \ss -> let t = findEmptyNumWorkspaceTag ss in
+                   flip S.greedyView ss t)
+        -- mod-| %! Move the focused window to an unused workspace and then
+        -- focus there.
+    , ((modm .|. shiftMask, xK_backslash),
+         windows $ \ss -> let t = findEmptyNumWorkspaceTag ss in
+                   flip S.greedyView (S.shift t ss) t)
         -- mod-`
     -- , ((modm, xK_quoteleft), return ())
         -- mod-{F1-F12,1-9}
@@ -248,10 +271,12 @@ addKeys (XConfig {modMask = modm}) =
    smhmdts = sendMessage HMD.ToggleStruts
 
    togglevga = do
-     screencount <- LIS.countScreens
+     (screencount :: Int) <- LIS.countScreens
      if screencount > 1
       then spawn "xrandr --output VGA1 --off"
       else spawn "xrandr --output VGA1 --auto --right-of LVDS1"
+
+-- we might consider hooking 0x1008FF2C (eject) which I use as a hog-killer
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------------- Layout Hook {{{
@@ -263,14 +288,18 @@ myLayoutHook =
   $ LPW.onWorkspaces [wkW, wkD] defaultFull   -- web and docs default full
   $ defaultResizeTall                         -- else, default tall
  where
-  defaultResizeTall = lrt ||| lmt ||| L.Full ||| wsslslrt
+  defaultResizeTall = lrt ||| lmt ||| L.Full ||| gimp ||| wsslslrt
   defaultFull = L.Full ||| lrt ||| lmt
 
   lmt = L.Mirror (L.Tall 1 (3/100) (1/2))
   wsslslrt = LS.mksls 1600 lrt lmc
-  lmc = LMC.multiCol [1] 2 0.01 (-0.33)
+  lmc = LMC.multiCol [1,1] 2 0.01 (-0.33)
   lrt = LRT.ResizableTall 1 (3/100) (1/2) []
 
+        -- From http://nathanhowell.net/2009/03/08/xmonad-and-the-gimp/
+  gimp = LIM.withIM (0.11) (UW.Role "gimp-toolbox") $
+             LR.reflectHoriz $
+             LIM.withIM (0.15) (UW.Role "gimp-dock") L.Full
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------------ Main {{{
@@ -312,30 +341,24 @@ main = do
             UC.setDefaultCursor UC.xC_left_ptr
             AXB.ensureanxmobar (S 0) "$HOME/lib/X/xmobarrc"
             AXB.updatexmobars
-      , manageHook = manageHook defaultConfig <+> HMD.manageDocks <+> myManageHook
-      , logHook = AXB.xmobarLH
+            -- HME.mewmhSH
+            HSW.setWMName "xmonad"
+      , manageHook = HMD.manageDocks <+> myManageHook
+      , logHook = {- HME.mewmhLH >> -} AXB.xmobarLH
       , layoutHook = myLayoutHook
-      , handleEventHook = AXB.xmobarEH
-        -- liftM2 mappend AXB.xmobarEH (return . const (All True))
+      , handleEventHook =           HMD.docksEventHook
+                          `mappend` AXB.xmobarEH
+                          -- `mappend` P.eventHandle
+                          -- `mappend` leh
       }
  where
     customKeys = (EZC.additionalKeys `ap` addKeys)
              . (EZC.removeKeys `ap` delKeys)
-
-{-
-main = xmonad defaultConfig
-    { startupHook = AE.evalExpressionWithReturn
-                        (myEvalConfig {AE.modules = ["xmonad.hs"]})
-                        "broadcastMessage (LS.SS (Just \"1\") Nothing)"
-                    >>= io . putStrLn . show
-    , layoutHook = mksls "foo" Nothing L.Full L.Full
-    }
--}
+    leh _ e = (io$putStrLn$"LEH " ++ show e) >> (return$All True)
 
 ----------------------------------------------------------------------- }}}
 
--- TODO
--- Urgency hooks
-
 -- VIM modeline, huzzah
 -- vim: tw=76 ts=4 expandtab nu ai foldmethod=marker
+--
+-- Open challenge: reset layout when last window closes, using EH
