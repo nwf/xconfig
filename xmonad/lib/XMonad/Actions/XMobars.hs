@@ -24,6 +24,7 @@ import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.Run as UR
 import qualified XMonad.Util.WindowProperties as UW
 
+import Control.Exception (onException)
 import Control.Monad (foldM,when)
 import qualified Data.IntMap as IM
 import Data.List (find, stripPrefix)
@@ -71,12 +72,13 @@ killxmobar dokill xmbs (S ix) = do
   case IM.lookup ix (xmScreenState xmbs) of
     Nothing -> return xmbs
     Just (h, pid) -> do
-      when dokill $ killpid pid
+      when dokill $ killpid pid `onException` return ()
       hClose h
       return $ xmbs
         { xmPidScreen =    M.delete pid (xmPidScreen   xmbs)
         , xmScreenState = IM.delete ix  (xmScreenState xmbs)
         , xmScreenWin =   IM.delete ix  (xmScreenWin   xmbs)
+        , xmScreenIntent = IM.delete ix (xmScreenIntent xmbs)
         , xmWinScreen =   maybe (xmWinScreen xmbs)
                                 (\w -> M.delete w (xmWinScreen xmbs))
                                 (IM.lookup ix (xmScreenWin xmbs))
