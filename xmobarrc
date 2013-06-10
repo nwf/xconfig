@@ -1,13 +1,13 @@
-Config {
-        bgColor = "black"
+Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
+       , bgColor = "black"
        , fgColor = "darkgoldenrod"
-       , position = TopW L 100 
-       , lowerOnStart = False
+       , position = Top
+       , lowerOnStart = True
+       , sepChar = "%"
+       , alignSep = "}{"
+       , template = "%StdinReader% }{ %multicpu% (%thermal0%|%thermal1% %fanspeed%) | %battery% | %memory% * %swap% | %dynnetwork% | %KBWI% | <fc=#ee9a00>%date%</fc>"
        , commands = [ Run Weather "KBWI" ["-t","BWI: <tempF>F","-L","50","-H","80","--normal","green","--high","red","--low","lightblue"] 36000
-                    , Run Network "eth0" ["-L","0","-H","32","--normal","green","--high","red"] 20
-                    , Run Network "wlan0" ["-L","0","-H","32","--normal","green","--high","red"] 20
-                    , Run Network "usb0" ["-L","0","-H","32","--normal","green","--high","red"] 20
-                    -- , Run DiskIO [("/dev/sda5", "<total>"), ("/dev/sda6","<total>")] [] 20
+                    , Run DynNetwork ["-L","0","-H","32","--normal","green","--high","red"] 20
                     , Run MultiCpu ["-L","25","-H","75","--low","green","--normal","yellow","--high","red"] 20
                     , Run ThermalZone 0 ["-t","<temp>"] 50
                     , Run ThermalZone 1 ["-t","<temp>"] 50
@@ -18,7 +18,4 @@ Config {
                     , Run Date "%a %b %_d %Y %H:%M:%S" "date" 10
                     , Run StdinReader
                     ]
-       , sepChar = "%"
-       , alignSep = "}{"
-       , template = "%StdinReader% }{ %multicpu% (%thermal0%|%thermal1% %fanspeed%) | %battery% | %memory% * %swap% | %wlan0% | %eth0% | %usb0% | %KBWI% | <fc=#ee9a00>%date%</fc>"
        }

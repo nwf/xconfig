@@ -1,3 +1,4 @@
 URxvt.foreground: darkgoldenrod
 URxvt.background: black
 URxvt.urgentOnBell: true
+URxvt.searchable-scrollback: CM-s

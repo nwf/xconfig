@@ -1,4 +1,4 @@
-7 patches for repository http://code.haskell.org/XMonadContrib:
+5 patches for repository http://code.haskell.org/XMonadContrib:
 
 Wed Nov  3 15:55:05 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Use messageHook in Util.EZConfig
@@ -6,20 +6,15 @@ Wed Nov  3 15:55:05 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
 Wed Nov  3 15:55:18 EDT 2010  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Use messageHook in Util.NamedActions
 
-Tue Sep 27 18:20:53 EDT 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Add ppOverride to Hooks.DynamicLog
-
 Fri Nov 18 14:20:49 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Add spawnPipePid
 
 Fri Nov 18 14:24:44 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Support for filters in XMonad.Prompt.Window
 
-Fri Nov 18 14:29:12 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
-  * Make XMonad.Prompt use the main event loop
-
 Fri Nov 18 14:30:13 EST 2011  Nathaniel Wesley Filardo <nwf@cs.jhu.edu>
   * Export adjustUrgents from XMonad.Hooks.UrgencyHook
+
 
 New patches:
 
@@ -47,7 +42,7 @@ hunk ./XMonad/Util/EZConfig.hs 710
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20101103195518
  Ignore-this: 5457d8aed1bf22410c90305be0c1f1e4
 ] {
-hunk ./XMonad/Util/NamedActions.hs 46
+hunk ./XMonad/Util/NamedActions.hs 50
  
  import XMonad.Actions.Submap(submap)
  import XMonad
@@ -55,7 +50,7 @@ hunk ./XMonad/Util/NamedActions.hs 46
  import Control.Arrow(Arrow((&&&), second, (***)))
  import Data.Bits(Bits((.&.), complement))
  import Data.List (groupBy)
-hunk ./XMonad/Util/NamedActions.hs 203
+hunk ./XMonad/Util/NamedActions.hs 207
  
  -- | An action to send to 'addDescrKeys' for showing the keybindings. See also 'showKm' and 'showKmSimple'
  xMessage :: [((KeyMask, KeySym), NamedAction)] -> NamedAction
@@ -67,76 +62,6 @@ hunk ./XMonad/Util/NamedActions.hs 203
      return ()
  
  -- | Merge the supplied keys with 'defaultKeysDescr', also adding a keybinding
-}
-[Add ppOverride to Hooks.DynamicLog
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20110927222053
- Ignore-this: ab1a39c1c1ad87692c81e824dac8cae6
-] {
-hunk ./XMonad/Actions/TopicSpace.hs 257
-         add_depth proj topic = proj pp . (((topic++":")++) . show) . depth $ topic
-         pp' = pp { ppHidden = add_depth ppHidden, ppVisible = add_depth ppVisible }
-         sortWindows = take maxDepth . sortBy (comparing $ depth . W.tag)
--    return $ DL.pprWindowSet sortWindows urgents pp' winset
-+    DL.pprWindowSet sortWindows urgents pp' winset
- 
- -- | Given a prompt configuration and a topic configuration, triggers the action associated with
- -- the topic given in prompt.
-hunk ./XMonad/Hooks/DynamicLog.hs 60
- -- Useful imports
- 
- import Codec.Binary.UTF8.String (encodeString)
--import Control.Monad (liftM2)
-+import Control.Monad (liftM, liftM2)
- import Data.Char ( isSpace, ord )
- import Data.List (intersperse, isPrefixOf, sortBy)
- import Data.Maybe ( isJust, catMaybes )
-hunk ./XMonad/Hooks/DynamicLog.hs 271
-     let ld = description . S.layout . S.workspace . S.current $ winset
- 
-     -- workspace list
--    let ws = pprWindowSet sort' urgents pp winset
-+    ws <- pprWindowSet sort' urgents pp winset
- 
-     -- window title
-     wt <- maybe (return "") (fmap show . getName) . S.peek $ winset
-hunk ./XMonad/Hooks/DynamicLog.hs 289
- -- | Format the workspace information, given a workspace sorting function,
- --   a list of urgent windows, a pretty-printer format, and the current
- --   WindowSet.
--pprWindowSet :: WorkspaceSort -> [Window] -> PP -> WindowSet -> String
--pprWindowSet sort' urgents pp s = sepBy (ppWsSep pp) . map fmt . sort' $
-+pprWindowSet :: WorkspaceSort -> [Window] -> PP -> WindowSet -> X String
-+pprWindowSet sort' urgents pp s = liftM (sepBy (ppWsSep pp))
-+                                   . mapM fmt . sort' $
-             map S.workspace (S.current s : S.visible s) ++ S.hidden s
-    where this     = S.currentTag s
-          visibles = map (S.tag . S.workspace) (S.visible s)
-hunk ./XMonad/Hooks/DynamicLog.hs 296
- 
--         fmt w = printer pp (S.tag w)
-+         fmt w = do
-+             movrd <- ppOverride pp w
-+             return $ maybe (printer pp (S.tag w)) (id) movrd
-           where printer | any (\x -> maybe False (== S.tag w) (S.findTag x s)) urgents  = ppUrgent
-                         | S.tag w == this                                               = ppCurrent
-                         | S.tag w `elem` visibles                                       = ppVisible
-hunk ./XMonad/Hooks/DynamicLog.hs 426
-                -- ^ how to print tags of empty hidden workspaces
-              , ppUrgent :: WorkspaceId -> String
-                -- ^ format to be applied to tags of urgent workspaces.
-+             , ppOverride :: WindowSpace -> X (Maybe String)
-+               -- ^ an optional override for formating of workspaces
-              , ppSep :: String
-                -- ^ separator to use between different log sections
-                -- (window name, layout, workspaces)
-hunk ./XMonad/Hooks/DynamicLog.hs 473
-                , ppHidden          = id
-                , ppHiddenNoWindows = const ""
-                , ppUrgent          = id
-+               , ppOverride        = \_ -> return Nothing
-                , ppSep             = " : "
-                , ppWsSep           = " "
-                , ppTitle           = shorten 80
 }
 [Add spawnPipePid
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118192049
@@ -158,7 +83,7 @@ hunk ./XMonad/Util/Run.hs 38
  import Control.Concurrent (threadDelay)
  import System.IO
  import System.Process (runInteractiveProcess)
-hunk ./XMonad/Util/Run.hs 140
+hunk ./XMonad/Util/Run.hs 149
  safeRunInTerm :: String -> String -> X ()
  safeRunInTerm options command = asks (terminal . config) >>= \t -> safeSpawn t [options, " -e " ++ command]
  
@@ -170,7 +95,7 @@ hunk ./XMonad/Util/Run.hs 140
      (rd, wr) <- createPipe
      setFdOption wr CloseOnExec True
      h <- fdToHandle wr
-hunk ./XMonad/Util/Run.hs 146
+hunk ./XMonad/Util/Run.hs 155
      hSetBuffering h LineBuffering
 -    _ <- xfork $ do
 -          _ <- dupTo rd stdInput
@@ -179,7 +104,7 @@ hunk ./XMonad/Util/Run.hs 146
 +        dupTo rd stdInput
 +        executeFile "/bin/sh" False ["-c", x] Nothing
      closeFd rd
-hunk ./XMonad/Util/Run.hs 150
+hunk ./XMonad/Util/Run.hs 159
 -    return h
 +    return (h, pid)
 +
@@ -264,537 +189,613 @@ hunk ./XMonad/Prompt/Window.hs 108
      where
        winAction a m    = flip whenJust (windows . a) . flip M.lookup m
 }
-[Make XMonad.Prompt use the main event loop
-Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118192912
- Ignore-this: 13890606f1edf4076c5f78b95cdc850e
-] {
-hunk ./XMonad/Hooks/DynamicLog.hs 203
-     h <- spawnPipe cmd
-     return $ conf
-         { layoutHook = avoidStruts (layoutHook conf)
--        , logHook = do
--                        logHook conf
--                        dynamicLogWithPP pp { ppOutput = hPutStrLn h }
-+        , logHook = do logHook conf
-+                       dynamicLogWithPP (pp { ppOutput = hPutStrLn h })
-         , manageHook = manageHook conf <+> manageDocks
-         , keys       = liftM2 M.union keys' (keys conf)
-         }
-hunk ./XMonad/Hooks/EwmhDesktops.hs 120
- --
- --  * _NET_ACTIVE_WINDOW (activate another window, changing workspace if needed)
- --
--ewmhDesktopsEventHook :: Event -> X All
--ewmhDesktopsEventHook e = handle e >> return (All True)
-+ewmhDesktopsEventHook :: EventHook
-+ewmhDesktopsEventHook _ e = handle e >> return (All True)
- 
- handle :: Event -> X ()
- handle ClientMessageEvent {
-hunk ./XMonad/Hooks/EwmhDesktops.hs 163
- -- An event hook to handle applications that wish to fullscreen using the
- -- _NET_WM_STATE protocol. This includes users of the gtk_window_fullscreen()
- -- function, such as Totem, Evince and OpenOffice.org.
--fullscreenEventHook :: Event -> X All
--fullscreenEventHook (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
-+fullscreenEventHook :: EventHook
-+fullscreenEventHook _ (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
-   state <- getAtom "_NET_WM_STATE"
-   fullsc <- getAtom "_NET_WM_STATE_FULLSCREEN"
-   wstate <- fromMaybe [] `fmap` getProp32 state win
-hunk ./XMonad/Hooks/EwmhDesktops.hs 188
- 
-   return $ All True
- 
--fullscreenEventHook _ = return $ All True
-+fullscreenEventHook _ _ = return $ All True
- 
- setNumberOfDesktops :: (Integral a) => a -> X ()
- setNumberOfDesktops n = withDisplay $ \dpy -> do
-hunk ./XMonad/Hooks/Minimize.hs 39
- -- > main = xmonad defaultConfig { layoutHook = myLayout
- -- >                             , handleEventHook = myHandleEventHook }
- 
--minimizeEventHook :: Event -> X All
--minimizeEventHook (ClientMessageEvent {ev_window = w,
-+minimizeEventHook :: EventHook
-+minimizeEventHook _ (ClientMessageEvent {ev_window = w,
-                                        ev_message_type = mt,
-                                        ev_data = dt}) = do
-     a_aw <- getAtom "_NET_ACTIVE_WINDOW"
-hunk ./XMonad/Hooks/Minimize.hs 53
-       when (message == iconicState) $ minimizeWindow w
- 
-     return (All True)
--minimizeEventHook _ = return (All True)
-+minimizeEventHook _ _ = return (All True)
-hunk ./XMonad/Hooks/PositionStoreHooks.hs 101
-         randomIntOffset :: X (Int)
-         randomIntOffset = io $ randomRIO (42, 242)
- 
--positionStoreEventHook :: Event -> X All
--positionStoreEventHook (DestroyWindowEvent {ev_window = w, ev_event_type = et}) = do
-+positionStoreEventHook :: EventHook
-+positionStoreEventHook _ (DestroyWindowEvent {ev_window = w, ev_event_type = et}) = do
-     when (et == destroyNotify) $ do
-         modifyPosStore (\ps -> posStoreRemove ps w)
-     return (All True)
-hunk ./XMonad/Hooks/PositionStoreHooks.hs 106
--positionStoreEventHook _ = return (All True)
-+positionStoreEventHook _ _ = return (All True)
-hunk ./XMonad/Hooks/ServerMode.hs 89
- 
- -- | Executes a command of the list when receiving its index via a special ClientMessageEvent
- -- (indexing starts at 1)
--serverModeEventHook :: Event -> X All
-+serverModeEventHook :: EventHook
- serverModeEventHook = serverModeEventHook' defaultCommands
- 
- -- | serverModeEventHook' additionally takes an action to generate the list of
-hunk ./XMonad/Hooks/ServerMode.hs 94
- -- commands.
--serverModeEventHook' :: X [(String,X ())] -> Event -> X All
--serverModeEventHook' cmdAction (ClientMessageEvent {ev_message_type = mt, ev_data = dt}) = do
-+serverModeEventHook' :: X [(String,X ())] -> EventHook
-+serverModeEventHook' cmdAction _ (ClientMessageEvent {ev_message_type = mt, ev_data = dt}) = do
-         d <- asks display
-         a <- io $ internAtom d "XMONAD_COMMAND" False
-         when (mt == a && dt /= []) $ do
-hunk ./XMonad/Hooks/ServerMode.hs 105
-                   Just (_,action) -> action
-                   Nothing         -> mapM_ (io . hPutStrLn stderr) . listOfCommands $ cl
-         return (All True)
--serverModeEventHook' _ _ = return (All True)
-+serverModeEventHook' _ _ _ = return (All True)
-hunk ./XMonad/Hooks/UrgencyHook.hs 85
- import Data.Bits (testBit)
- import Data.List (delete, (\\))
- import Data.Maybe (listToMaybe, maybeToList)
-+import Foreign.Ptr (Ptr)
- import qualified Data.Set as S
- 
- -- $usage
-hunk ./XMonad/Hooks/UrgencyHook.hs 329
- -- ourselves, allowing us to clear urgency when a window is visible, and not to
- -- set urgency if a window is visible. If you have a better idea, please, let us
- -- know!
--handleEvent :: UrgencyHook h => WithUrgencyHook h -> Event -> X ()
--handleEvent wuh event =
-+handleEvent :: UrgencyHook h => WithUrgencyHook h -> Ptr XEvent -> Event -> X ()
-+handleEvent wuh _ event =
-     case event of
-       PropertyEvent { ev_event_type = t, ev_atom = a, ev_window = w } -> do
-           when (t == propertyNotify && a == wM_HINTS) $ withDisplay $ \dpy -> do
-hunk ./XMonad/Layout/Fullscreen.hs 175
- fullscreenFloatRect r = ModifiedLayout $ FullscreenFloat r M.empty
- 
- -- | The event hook required for the layout modifiers to work
--fullscreenEventHook :: Event -> X All
--fullscreenEventHook (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
-+fullscreenEventHook :: EventHook
-+fullscreenEventHook _ (ClientMessageEvent _ _ _ dpy win typ (action:dats)) = do
-   state <- getAtom "_NET_WM_STATE"
-   fullsc <- getAtom "_NET_WM_STATE_FULLSCREEN"
-   wstate <- fromMaybe [] `fmap` getProp32 state win
-hunk ./XMonad/Layout/Fullscreen.hs 199
-       sendMessage FullscreenChanged
-   return $ All True
- 
--fullscreenEventHook (DestroyWindowEvent {ev_window = w}) = do
-+fullscreenEventHook _ (DestroyWindowEvent {ev_window = w}) = do
-   -- When a window is destroyed, the layouts should remove that window
-   -- from their states.
-   broadcastMessage $ RemoveFullscreen w
-hunk ./XMonad/Layout/Fullscreen.hs 207
-   sendMessageWithNoRefresh FullscreenChanged cw
-   return $ All True
- 
--fullscreenEventHook _ = return $ All True
-+fullscreenEventHook _ _ = return $ All True
- 
- -- | Manage hook that sets the fullscreen property for
- -- windows that are initially fullscreen
-hunk ./XMonad/Prompt.hs 1
-+{-# LANGUAGE DeriveDataTypeable #-}
- {-# LANGUAGE ExistentialQuantification #-}
-hunk ./XMonad/Prompt.hs 3
-+{-# LANGUAGE Rank2Types #-}
- -----------------------------------------------------------------------------
- -- |
- -- Module      :  XMonad.Prompt
-hunk ./XMonad/Prompt.hs 22
-     ( -- * Usage
-       -- $usage
-       mkXPrompt
--    , mkXPromptWithReturn
-+    , eventHandle
-     , amberXPConfig
-     , defaultXPConfig
-     , greenXPConfig
-hunk ./XMonad/Prompt.hs 75
- import XMonad  hiding (config, cleanMask)
- import qualified XMonad as X (numberlockMask)
- import qualified XMonad.StackSet as W
-+import qualified XMonad.Util.ExtensibleState as XS
- import XMonad.Util.Font
- import XMonad.Util.Types
- import XMonad.Util.XSelection (getSelection)
-hunk ./XMonad/Prompt.hs 91
- import Data.IORef
- import Data.List
- import Data.Maybe (fromMaybe)
-+import Data.Monoid (All(..))
- import Data.Set (fromList, toList)
- import System.Directory (getAppUserDataDirectory)
- import System.IO
-hunk ./XMonad/Prompt.hs 120
-         , gcon               :: !GC
-         , fontS              :: !XMonadFont
-         , xptype             :: !XPType
-+        , history            :: History
-         , commandHistory     :: W.Stack String
-         , offset             :: !Int
-         , config             :: XPConfig
-hunk ./XMonad/Prompt.hs 127
-         , successful         :: Bool
-         , numlockMask        :: KeyMask
-         , done               :: Bool
-+        , stepfn             :: KeyStroke -> Event -> XP ()
-+        , sact               :: String -> X ()
-+        , fact               :: X ()
-         }
- 
- data XPConfig =
-hunk ./XMonad/Prompt.hs 238
- type ComplFunction = String -> IO [String]
- 
- initState :: XPrompt p => Display -> Window -> Window -> Rectangle -> ComplFunction
--          -> GC -> XMonadFont -> p -> [String] -> XPConfig -> KeyMask -> XPState
--initState d rw w s compl gc fonts pt h c nm =
-+          -> GC -> XMonadFont -> p -> History -> [String] -> XPConfig -> KeyMask
-+          -> (KeyStroke -> Event -> XP ()) -> (String -> X()) -> X () -> XPState
-+initState d rw w s compl gc fonts pt h hs c nm st sa fa =
-     XPS { dpy                = d
-         , rootw              = rw
-         , win                = w
-hunk ./XMonad/Prompt.hs 252
-         , gcon               = gc
-         , fontS              = fonts
-         , xptype             = XPT pt
-+        , history            = h
-         , commandHistory     = W.Stack { W.focus = defaultText c
-                                        , W.up    = []
-hunk ./XMonad/Prompt.hs 255
--                                       , W.down  = h }
-+                                       , W.down  = hs }
-         , offset             = length (defaultText c)
-         , config             = c
-         , successful         = False
-hunk ./XMonad/Prompt.hs 261
-         , done               = False
-         , numlockMask        = nm
-+        , stepfn             = st
-+        , sact               = sa
-+        , fact               = fa
-         }
- 
- -- this would be much easier with functional references
-hunk ./XMonad/Prompt.hs 282
- getInput :: XP String
- getInput = gets command
- 
---- | Same as 'mkXPrompt', except that the action function can have
----   type @String -> X a@, for any @a@, and the final action returned
----   by 'mkXPromptWithReturn' will have type @X (Maybe a)@.  @Nothing@
----   is yielded if the user cancels the prompt (by e.g. hitting Esc or
----   Ctrl-G).  For an example of use, see the 'XMonad.Prompt.Input'
----   module.
--mkXPromptWithReturn :: XPrompt p => p -> XPConfig -> ComplFunction -> (String -> X a)  -> X (Maybe a)
--mkXPromptWithReturn t conf compl action = do
--  XConf { display = d, theRoot = rw } <- ask
--  s    <- gets $ screenRect . W.screenDetail . W.current . windowset
--  hist <- io readHistory
--  w    <- io $ createWin d rw conf s
--  io $ selectInput d w $ exposureMask .|. keyPressMask
--  gc <- io $ createGC d w
--  io $ setGraphicsExposures d gc False
--  fs <- initXMF (font conf)
--  numlock <- gets $ X.numberlockMask
--  let hs = fromMaybe [] $ M.lookup (showXPrompt t) hist
--      st = initState d rw w s compl gc fs (XPT t) hs conf numlock
--  st' <- io $ execStateT runXP st
--
--  releaseXMF fs
--  io $ freeGC d gc
--  if successful st'
--    then do
--      let prune = take (historySize conf)
--      io $ writeHistory $ M.insertWith
--                                (\xs ys -> prune . historyFilter conf $ xs ++ ys)
--                                (showXPrompt t)
--                                (prune $ historyFilter conf [command st'])
--                                hist
--                                -- we need to apply historyFilter before as well, since
--                                -- otherwise the filter would not be applied if
--                                -- there is no history
--      Just <$> action (command st')
--    else return Nothing
--
- -- | Creates a prompt given:
- --
- -- * a prompt type, instance of the 'XPrompt' class.
-hunk ./XMonad/Prompt.hs 294
- --
- -- * an action to be run: the action must take a string and return 'XMonad.X' ()
- mkXPrompt :: XPrompt p => p -> XPConfig -> ComplFunction -> (String -> X ()) -> X ()
--mkXPrompt t conf compl action = mkXPromptWithReturn t conf compl action >> return ()
-+mkXPrompt t conf compl action = mkXPromptWithFail t conf compl action (return ())
- 
-hunk ./XMonad/Prompt.hs 296
--runXP :: XP ()
--runXP = do
--  (d,w) <- gets (dpy &&& win)
--  status <- io $ grabKeyboard d w True grabModeAsync grabModeAsync currentTime
--  when (status == grabSuccess) $ do
--          updateWindows
--          eventLoop handle
--          io $ ungrabKeyboard d currentTime
--  io $ destroyWindow d w
--  destroyComplWin
--  io $ sync d False
-+-- | Like mkXPrompt but allows the caller to specify a hook for when the
-+-- prompt is not successful.
-+mkXPromptWithFail :: XPrompt p => p -> XPConfig -> ComplFunction
-+                  -> (String -> X ())
-+                  -> X ()
-+                  -> X ()
-+mkXPromptWithFail t conf compl act af = do
-+  XConf { display = d, theRoot = rw } <- ask
-+  s    <- gets $ screenRect . W.screenDetail . W.current . windowset
-+  hist <- io readHistory
-+  w    <- io $ createWin d rw conf s
-+  io $ selectInput d w $ exposureMask .|. keyPressMask
-+  gc <- io $ createGC d w
-+  io $ setGraphicsExposures d gc False
-+  fs <- initXMF (font conf)
-+  nl <- gets $ X.numberlockMask
-+  let hs = fromMaybe [] $ M.lookup (showXPrompt t) hist
-+      st = initState d rw w s compl gc fs (XPT t) hist hs conf nl handle act af
-+
-+  (PM m) <- XS.get
-+  let m' = M.insert w st m
-+  XS.put (PM m')
- 
- type KeyStroke = (KeySym, String)
- 
-hunk ./XMonad/Prompt.hs 321
--eventLoop :: (KeyStroke -> Event -> XP ()) -> XP ()
--eventLoop action = do
--  d <- gets dpy
--  (keysym,string,event) <- io $
--            allocaXEvent $ \e -> do
--              maskEvent d (exposureMask .|. keyPressMask) e
--              ev <- getEvent e
--              (ks,s) <- if ev_event_type ev == keyPress
--                        then lookupString $ asKeyEvent e
--                        else return (Nothing, "")
--              return (ks,s,ev)
--  action (fromMaybe xK_VoidSymbol keysym,string) event
--  gets done >>= flip unless (eventLoop handle)
-+newtype PM = PM (M.Map Window XPState) deriving (Typeable)
-+instance ExtensionClass PM where
-+  initialValue = PM (M.empty) 
-+  extensionType = StateExtension
-+
-+eventHandle :: EventHook
-+eventHandle ep e = do
-+  (PM m) <- XS.get
-+  mw <- liftM W.peek $ gets windowset
-+  case mw of
-+    Nothing -> return () 
-+    Just w -> case M.lookup w m of
-+                Nothing -> return ()
-+                Just s -> do
-+                    ks <- liftM (first (fromMaybe xK_VoidSymbol)) $
-+                                 if ev_event_type e == keyPress
-+                                  then liftIO $ lookupString $ asKeyEvent ep
-+                                  else return (Nothing, "")
-+                    (f,s') <- io $ flip runStateT s $ do
-+                                    a <- gets stepfn
-+                                    a ks e
-+                                    gets done
-+                    if f
-+                     then do
-+                        XS.put$PM$M.delete w m
-+                        let d = (dpy s')
-+                        io $ destroyWindow d w
-+                        io $ runStateT destroyComplWin s'
-+                        io $ sync d False
-+
-+                        releaseXMF (fontS s')
-+                        io $ freeGC d (gcon s')
-+                        if successful s'
-+                         then do
-+                               let conf = config s'
-+                               let prune = take (historySize conf)
-+                               io $ writeHistory $ M.insertWith
-+                                 (\xs ys -> prune . historyFilter conf $ xs ++ ys)
-+                                 (showXPrompt$xptype s')
-+                                 (prune $ historyFilter conf [command s'])
-+                                 (history s')
-+                                 -- we need to apply historyFilter before as well, since
-+                                 -- otherwise the filter would not be applied if
-+                                 -- there is no history
-+                               sact s' (command s')
-+                         else fact s'
-+                     else
-+                        XS.put$PM$M.insert w s' m
-+  return$All True
- 
- -- | Removes numlock and capslock from a keymask.
- -- Duplicate of cleanMask from core, but in the
-hunk ./XMonad/Prompt.hs 380
-   let highMasks = 1 `shiftL` 12 - 1
-   return (complement (numlock .|. lockMask) .&. msk .&. highMasks)
- 
-+
- -- Main event handler
-hunk ./XMonad/Prompt.hs 382
--handle :: KeyStroke -> Event -> XP ()
-+handle :: (KeySym, String) -> Event -> StateT XPState IO ()
- handle ks@(sym,_) e@(KeyEvent {ev_event_type = t, ev_state = m}) = do
-   complKey <- gets $ completionKey . config
-   c <- getCompletions
-hunk ./XMonad/Prompt.hs 407
-                     let new_command = nextCompletion (xptype st) (command st) l
-                     in modify $ \s -> setCommand new_command $ s { offset = length new_command }
-                 updateWins  l = redrawWindows l >>
--                                eventLoop (completionHandle l)
-+                                setStepFn (completionHandle l)
-             case c of
-hunk ./XMonad/Prompt.hs 409
--              []  -> updateWindows   >> eventLoop handle
-+              []  -> updateWindows   >> setStepFn handle
-               [x] -> updateState [x] >> getCompletions >>= updateWins
-               l   -> updateState l   >> updateWins l
-hunk ./XMonad/Prompt.hs 412
--      | t == keyRelease && sym == complKey -> eventLoop (completionHandle c)
-+      | t == keyRelease && sym == complKey -> setStepFn (completionHandle c)
-       | otherwise -> keyPressHandle m ks -- some other key, handle it normally
- -- some other event: go back to main loop
-hunk ./XMonad/Prompt.hs 415
--completionHandle _ k e = handle k e
-+completionHandle _ _ _ = return ()
- 
- 
- tryAutoComplete :: XP Bool
-hunk ./XMonad/Prompt.hs 475
-   case M.lookup (kmask,ks) km of
-     Just action -> action >> updateWindows
-     Nothing -> case str of
--                 "" -> eventLoop handle
-+                 "" -> setStepFn handle
-                  _ -> when (kmask .&. controlMask == 0) $ do
-                                  insertString (decodeString str)
-                                  updateWindows
-hunk ./XMonad/Prompt.hs 488
- setDone :: Bool -> XP ()
- setDone b = modify $ \s -> s { done = b }
- 
-+setStepFn :: (KeyStroke -> Event -> XP ()) -> XP ()
-+setStepFn h = modify $ \s -> s { stepfn = h }
-+
- -- KeyPress and State
- 
- -- | Quit.
-hunk ./XMonad/Prompt/Email.hs 59
- --   of addresses for autocompletion.
- emailPrompt :: XPConfig -> [String] -> X ()
- emailPrompt c addrs =
--    inputPromptWithCompl c "To" (mkComplFunFromList addrs) ?+ \to ->
--    inputPrompt c "Subject" ?+ \subj ->
--    inputPrompt c "Body" ?+ \body ->
-+    inputPromptWithCompl c "To" (mkComplFunFromList addrs) $ \to ->
-+    inputPrompt c "Subject" $ \subj ->
-+    inputPrompt c "Body" $ \body ->
-     runProcessWithInput "mail" ["-s", subj, to] (body ++ "\n")
-          >> return ()
-hunk ./XMonad/Prompt/Input.hs 21
-                             -- $usage
-                             inputPrompt,
-                             inputPromptWithCompl,
--                            (?+),
-                             InputPrompt,
-                            ) where
- 
-hunk ./XMonad/Prompt/Input.hs 47
- -- just wants a convenient way to provide the input for this function
- -- from within xmonad.  Here is where the "XMonad.Prompt.Input" module
- -- comes into play.  He can use the 'inputPrompt' function to create a
---- prompt, and the '?+' operator to compose the prompt with the
---- @fireEmployee@ action, like so:
-+-- prompt around the @fireEmployee@ action, like so:
- --
- -- > firingPrompt :: X ()
-hunk ./XMonad/Prompt/Input.hs 50
---- > firingPrompt = inputPrompt defaultXPConfig \"Fire\" ?+ fireEmployee
-+-- > firingPrompt = inputPrompt defaultXPConfig \"Fire\" fireEmployee
- --
- -- If @employees@ contains a list of all his employees, he could also
- -- create an autocompleting version, like this:
-hunk ./XMonad/Prompt/Input.hs 56
- --
- -- > firingPrompt' = inputPromptWithCompl defaultXPConfig \"Fire\"
---- >                     (mkComplFunFromList employees) ?+ fireEmployee
-+-- >                     (mkComplFunFromList employees) fireEmployee
- --
- -- Now all he has to do is add a keybinding to @firingPrompt@ (or
- -- @firingPrompt'@), such as
-hunk ./XMonad/Prompt/Input.hs 89
- --   (Maybe String)@, which reflects the fact that the user might
- --   cancel the prompt (resulting in @Nothing@), or enter an input
- --   string @s@ (resulting in @Just s@).
--inputPrompt :: XPConfig -> String -> X (Maybe String)
-+inputPrompt :: XPConfig -> String -> (String -> X ()) -> X () 
- inputPrompt c p = inputPromptWithCompl c p (const (return []))
- 
- -- | The same as 'inputPrompt', but with a completion function.  The
-hunk ./XMonad/Prompt/Input.hs 97
- --   "XMonad.Prompt".  The 'mkComplFunFromList' utility function, also
- --   defined in "XMonad.Prompt", is useful for creating such a
- --   function from a known list of possibilities.
--inputPromptWithCompl :: XPConfig -> String -> ComplFunction -> X (Maybe String)
--inputPromptWithCompl c p compl = mkXPromptWithReturn (InputPrompt p) c compl return
--
-+inputPromptWithCompl :: XPConfig -> String -> ComplFunction -> (String -> X ()) -> X ()
-+inputPromptWithCompl c p compl = mkXPrompt (InputPrompt p) c compl
- 
-hunk ./XMonad/Prompt/Input.hs 100
-+{-
- infixr 1 ?+
- 
- -- | A combinator for hooking up an input prompt action to a function
-hunk ./XMonad/Prompt/Input.hs 114
- --   want to move it to a different module, be my guest.
- (?+) :: (Monad m) => m (Maybe a) -> (a -> m ()) -> m ()
- x ?+ k = x >>= maybe (return ()) k
-+-}
-+
-}
 [Export adjustUrgents from XMonad.Hooks.UrgencyHook
 Nathaniel Wesley Filardo <nwf@cs.jhu.edu>**20111118193013
  Ignore-this: 21404628542c8c9dbac34fd485e3a3c2
-] hunk ./XMonad/Hooks/UrgencyHook.hs 70
-                                  SpawnUrgencyHook(..),
-                                  UrgencyHook(urgencyHook),
-                                  Interval,
+] merger 0.0 (
+hunk ./XMonad/Hooks/UrgencyHook.hs 71
++                                 borderUrgencyHook, focusHook, spawnUrgencyHook, stdoutUrgencyHook
+hunk ./XMonad/Hooks/UrgencyHook.hs 71
 +                                 adjustUrgents
-                                  ) where
- 
- import XMonad
+)
 
 Context:
 
+[add whenCurrentOn to X.L.IndependentScreens
+Daniel Wagner <daniel@wagner-home.com>**20130408225251
+ Ignore-this: ceea3d391f270abc9ed8e52ce19fb1ac
+] 
+[Allow to specify the initial gaps' states in X.L.Gaps
+Paul Fertser <fercerpav@gmail.com>**20130222072232
+ Ignore-this: 31596d918d0050e36ce3f64f56205a64
+] 
+[should bump X11 dependency, too, to make sure we have getAtomName
+Daniel Wagner <daniel@wagner-home.com>**20130225180527
+ Ignore-this: 260711f27551f18cc66afeb7b4846b9f
+] 
+[getAtomName is now defined in the X11 library
+Daniel Wagner <daniel@wagner-home.com>**20130225180323
+ Ignore-this: 3b9e17c234679e98752a47c37132ee4e
+] 
+[Allow to limit maximum row count in X.Prompt completion window
+Paul Fertser <fercerpav@gmail.com>**20130221122050
+ Ignore-this: 923656f02996f2de2b1336275392c5f9
+ 
+ On a keyboard-less device (such as a smartphone), where one has to use
+ an on-screen keyboard, the maximum completion window height must be
+ limited to avoid overlapping the keyboard.
+] 
+[Note in U.NameActions that xmonad core can list default keys now
+Adam Vogt <vogt.adam@gmail.com>**20130217233026
+ Ignore-this: 937bff636fa88171932d5192fe8e290b
+] 
+[Export U.NamedActions.addDescrKeys per evaryont's request.
+Adam Vogt <vogt.adam@gmail.com>**20130217232619
+ Ignore-this: a694a0a3ece70b52fba6e8f688d86344
+] 
+[Add EWMH DEMANDS_ATTENTION support to UrgencyHook.
+Maarten de Vries <maarten@de-vri.es>**20130212181229
+ Ignore-this: 5a4b314d137676758fad9ec8f85ce422
+ 
+ Add support for the _NET_WM_STATE_DEMANDS_ATTENTION atom
+ by treating it the same way as the WM_HINTS urgency flag.
+ 
+] 
+[Unconditionally set _NET_WORKAREA in ManageDocks
+Adam Vogt <vogt.adam@gmail.com>**20130117180851
+ Ignore-this: 9f57e53fba9573d8a92cf153beb7fe7a
+] 
+[spawn command when no completion is available (if alwaysHighlight is True); changes commandToComplete in Prompt/Shell to complete the whole word instead of using getLastWord
+c.lopez@kmels.net**20130209190456
+ Ignore-this: ca7d354bb301b555b64d5e76e31d10e8
+] 
+[order-unindexed-ws-last
+matthewhague@zoho.com**20120703222726
+ Ignore-this: 4af8162ee8b16a60e8fd62fbc915d3c0
+ 
+ Changes the WorkspaceCompare module's comparison by index to put workspaces without an index last (rather than first).
+] 
+[SpawnOn modification for issue 523
+Adam Vogt <vogt.adam@gmail.com>**20130114014642
+ Ignore-this: 703f7dc0f800366b752f0ec1cecb52e5
+ 
+ This moves the function to help clean up the `Spawner' to the ManageHook
+ rather than in functions like spawnOn. Probably it makes no difference, the
+ reason is because there's one manageSpawn function but many different so this
+ way there are less functions to write.
+] 
+[Update L.TrackFloating.useTransient example code
+Adam Vogt <vogt.adam@gmail.com>**20130112041239
+ Ignore-this: e4e31cf1db742778c1d59d52fdbeed7a
+ 
+ Suggest useTransient goes to the right of trackFloating which is the
+ configuration actually tested.
+] 
+[Adapt ideas of issue 306 patch to a new modifier in L.TrackFloating
+Adam Vogt <vogt.adam@gmail.com>**20130112035701
+ Ignore-this: d54d27b71b97144ef0660f910fd464aa
+] 
+[Make X.A.CycleWS not rely on hidden WS order
+Dmitri Iouchtchenko <johnnyspoon@gmail.com>**20130109023328
+ Ignore-this: 8717a154b33253c5df4e9a0ada4c2c3e
+] 
+[Add X.H.WorkspaceHistory
+Dmitri Iouchtchenko <johnnyspoon@gmail.com>**20130109023307
+ Ignore-this: c9e7ce33a944facc27481dde52c7cc80
+] 
+[Allow removing arbitrary workspaces
+Dmitri Iouchtchenko <johnnyspoon@gmail.com>**20121231214343
+ Ignore-this: 6fce4bd3d0c5337e5122158583138e74
+] 
+[Remove first-hidden restriction from X.A.DynamicWorkspaces.removeWorkspace'
+Dmitri Iouchtchenko <johnnyspoon@gmail.com>**20121231214148
+ Ignore-this: 55fb0859e9a5f476a834ecbdb774aac8
+] 
+[Add authorspellings file for `darcs show authors'.
+Adam Vogt <vogt.adam@gmail.com>**20130101040031
+ Ignore-this: c3198072ebc6a71d635bec4d8e2c78fd
+ 
+ This authorspellings file includes a couple people who've contributed to xmonad
+ (not XMonadContrib). When people have multiple addresses, the most recent one
+ has been picked.
+] 
+[TAG 0.11
+Adam Vogt <vogt.adam@gmail.com>**20130101014231
+ Ignore-this: 57cf32412fd1ce912811cb7fafe930f5
+] 
+[bump cabal-version to satsify hackage
+Adam Vogt <vogt.adam@gmail.com>**20130101014159
+ Ignore-this: 1dd69577a60bae63362a42022764e5fd
+] 
+[bump version to 0.11
+Adam Vogt <vogt.adam@gmail.com>**20121231104252
+ Ignore-this: 8c57d0f366509655d0473adf802eb1ce
+] 
+[Add more metadata to cabal file
+Adam Vogt <vogt.adam@gmail.com>**20121231184513
+ Ignore-this: b7767194e905f2bbd918bb0d371f281
+] 
+[X.A.Workscreen make the whole module description show up for haddock
+Adam Vogt <vogt.adam@gmail.com>**20121231024600
+ Ignore-this: a2ac895989090322a849695068f812b5
+] 
+[Note that an alternative to XMonad.Actions.ShowText is X.U.Dzen
+Adam Vogt <vogt.adam@gmail.com>**20121231023042
+ Ignore-this: ae6476e5d33a559fd8503c44413311b8
+] 
+[Add X.A.DynamicWorkspaces.renameWorkspaceByName.
+Dmitri Iouchtchenko <johnnyspoon@gmail.com>**20121227063531
+ Ignore-this: 4b8aa0405de3969000b1a78eb12992
+] 
+[Change type of X.A.ShowText.handleTimerEvent so example code typechecks.
+Adam Vogt <vogt.adam@gmail.com>**20121226013841
+ Ignore-this: 3c58a9ff124ab02325df6f38e0eaec05
+] 
+[Describe arguments for X.A.ShowText.flashText
+Adam Vogt <vogt.adam@gmail.com>**20121226013725
+ Ignore-this: 7f00a11196115ebf814c616aaf8e96f
+] 
+[Add XMonad.Actions.ShowText
+pastorelli.mario@gmail.com**20121225202635
+ Ignore-this: 5f4818f7ec9ad37df58e73d4bb8b5590
+] 
+[Record polachok's fix for issue 507
+Adam Vogt <vogt.adam@gmail.com>**20121216182724
+ Ignore-this: 13743d035e50f642de017c3304f914e
+] 
+[Removes unused function spawnWithActions and redundant imports in XMonad.Actions.Launcher
+c.lopez@kmels.net**20121215223714
+ Ignore-this: 76d7ac195e186b491968a548a13889c
+] 
+[A.Launcher markup identifiers for haddock links
+Adam Vogt <vogt.adam@gmail.com>**20121215165914
+ Ignore-this: 2fd3fa1dd4e00d573dd359a4b6a7291b
+] 
+[Address warnings from Debug modules
+Adam Vogt <vogt.adam@gmail.com>**20121215165525
+ Ignore-this: f97416ae4feffe4e5f9916d14d9e1524
+ 
+ The warnings were related to ghc-7.6 removing Prelude.catch
+ (triggering warnings regarding the import hiding it), as well
+ as defaulting of some numeric types.
+] 
+[Removes LocateMode and LocateRegexMode from XMonad.Actions.Launcher
+c.lopez@kmels.net**20121214211230
+ Ignore-this: b8ad32f23f15368a94202f9ad73995f2
+] 
+[debug-hooks
+allbery.b@gmail.com**20120813223821
+ Ignore-this: 7f41c93fdd6643c687598d2fe07aad5d
+ Hooks to print diagnostic information to stderr (usually .xsession-errors)
+ to help debug complex issues involving the StackSet and received events.
+] 
+[Remove trailing whitespace.
+Adam Vogt <vogt.adam@gmail.com>**20121109014156
+ Ignore-this: 72e3afb6e6df47c51262006601765365
+] 
+[Use Control.Exception.catch explitly to avoid warnings
+Adam Vogt <vogt.adam@gmail.com>**20121109013506
+ Ignore-this: 2cebdfe604c581f2b4a644e9aed726c7
+ 
+ The base that comes with ghc-7.6.1 no longer includes Prelude.catch;
+ so these modules were changed so that there is no warning for
+ 
+ import Prelude hiding (catch)
+ 
+ At the same time these changes should be compatible with older GHCs,
+ since the catch being has never been the one in the Prelude.
+] 
+[Add missing type signatures.
+Adam Vogt <vogt.adam@gmail.com>**20121109012752
+ Ignore-this: f54f5d9907ae48d58c98de7f8eb1f8a
+ 
+ For whatever reason, some patches applied were missing these signatures.
+ While haddock has been able to include inferred signatures for a while,
+ including type signatures makes it easier to see if and when types have
+ been changed.
+] 
+[Rename variables "state" to avoid warnings about shadowing
+Adam Vogt <vogt.adam@gmail.com>**20121109012316
+ Ignore-this: cd063d632412f758ca9fed6393521c8f
+ 
+ XMonad core re-exports Control.Monad.State, which includes
+ a function "state" if you happen to use mtl-2. Since there's
+ a chance xmonad still works with mtl-1 avoid imports like:
+ 
+ import XMonad hiding (state)
+] 
+[Rename variable in L.Minimize to avoid shadowing.
+Adam Vogt <vogt.adam@gmail.com>**20121109003410
+ Ignore-this: b46d3e8e0d4106cea6966116be386677
+ 
+ This "state" is new with a newer mtl.
+] 
+[Gut H.ICCCMFocus: issue 177 has been merged in core.
+Adam Vogt <vogt.adam@gmail.com>**20121108225716
+ Ignore-this: 937fe7f514ea6e36ee529e055e100e7f
+ 
+ Keep the module for now: the LG3D bit might still be useful
+ and there's no need to break configs unnecessarily.
+] 
+[ewmh-eventhook-custom
+pastorelli.mario@gmail.com**20120816153032
+ Ignore-this: 95176f6d955d74321c28caafda63faa0
+ 
+ Add ewmhDesktopsEventHookCustom, a generalized version of ewmhDesktopsEventHook that takes a sort function as argument. This sort function should be the same used by the LogHook.
+] 
+[Added smart spacing to the spacing module
+daedalusinfinity@gmail.com**20120923034527
+ Ignore-this: 9104bc8feb832f63f2f18998c0f7ba92
+ Added smart spacing to the spacing module, which adds spacing to all windows,
+ except to windows on singleton workspaces.
+] 
+[Improves haddock documentation
+c.lopez@kmels.net**20120826091716
+ Ignore-this: a0ce4838652acfff7922c111e4d879bb
+] 
+[Improve comments, add an error throw that shouldn't happen
+c.lopez@kmels.net**20120826085426
+ Ignore-this: 7675070826b3c53499e4352e692d6036
+] 
+[fix a bug when ncompletions = nrows
+c.lopez@kmels.net**20120826083137
+ Ignore-this: 5f573028318473c333809217c271a81d
+] 
+[Fixes typos in Actions.Launcher haddock documentation
+c.lopez@kmels.net**20120811112502
+ Ignore-this: f8152c0ad59d2b0cc9a6c9061e83aaf0
+] 
+[Correctly get the autocompletion item when alwaysHighlight in XMonad.Prompt is True
+c.lopez@kmels.net**20120811104805
+ Ignore-this: fa2600df210c7d3472a797f19fb31a7
+] 
+[Removes warnings, adds a browser value for LauncherConfig in haddock comments
+c.lopez@kmels.net**20120628114533
+ Ignore-this: 2610cf63594db3df61bac52f3d8f5836
+ 
+] 
+[Changes on XPrompt:
+c.lopez@kmels.net**20120628101749
+ Ignore-this: 2384f5c1b886716b3d9785877c2e32f9
+   
+     * Adds mkPromptWithModes, creates a prompt given a list of modes (list of XPType).
+ 
+     * Adds Setting `alwaysHighlight` to defaultXPConfig. When set to true, autocompletion always highlight the first result if it is not highlighted.
+     
+ Adds module XMonad.Actions.Launcher. This module allows to combine and switch between instances of XPrompt. It includes a default set of modes which require the programs `hoogle`, `locate` and `calc` to be installed to work properly.
+ 
+] 
+[accept more windows as docks
+Daniel Wagner <daniel@wagner-home.com>**20120823124153
+ Ignore-this: 21d9b406c7e39cca2cc60331aab04873
+] 
+[strip newlines from dmenu's returns to be compatible with the newest version of dmenu
+longpoke@gmail.com**20120723212807
+ Ignore-this: 3b11a35125d0bc23b33e0b926562f85a
+] 
+[A workscreen permits to display a set of workspaces on several
+kedals0@gmail.com**20120706093308
+ Ignore-this: 572ed3c3305205bfbcc17bb3fe2600a3
+ screens. In xinerama mode, when a workscreen is viewed, workspaces
+ associated to all screens are visible.
+ 
+ The first workspace of a workscreen is displayed on first screen,
+ second on second screen, etc. Workspace position can be easily
+ changed. If the current workscreen is called again, workspaces are
+ shifted.
+ 
+ This also permits to see all workspaces of a workscreen even if just
+ one screen is present, and to move windows from workspace to workscreen.
+] 
+[refer to the new name 'handleEventHook' instead of the old name 'eventHook' in X.L.Fullscreen documentation
+Daniel Wagner <daniel@wagner-home.com>**20120618181003
+ Ignore-this: bd3b26c758cf3993d5a93957bb6f3663
+] 
+[UrgencyHooks made available as Window -> X () functions
+gopsychonauts@gmail.com**20120504062339
+ Ignore-this: 6a57cae1d693109b7e27c6471d04f50f
+ Adds an UrgencyHook instance for the type Window -> X (), allowing any such
+ functions to be used directly as UrgencyHooks. The Show and Read constraints
+ were removed from the UrgencyHook class in order to permit this; these
+ constraints were required only in a historical implementation of the module,
+ which used a layout modifier.
+ 
+ All existing configurations using UrgencyHooks should remain fully functional.
+ New configs may make use of this modification by declaring their UrgencyHook as
+ a simple Window -> X () function.
+ 
+] 
+[updates to XMonad.Prompt re: word-oriented commands
+Brent Yorgey <byorgey@cis.upenn.edu>**20120510174317
+ Ignore-this: 138b5e8942fe4b55ad7e6ab24f17703f
+ 
+   + change killWord and moveWord to have emacs-like behavior: first move
+     past/kill consecutive whitespace, then move past/kill consecutive
+     non-whitespace.
+ 
+   + create variants killWord' and moveWord' which take a predicate
+     specifying non-word characters.
+ 
+   + create variants defaultXPKeymap' and emacsLikeXPKeymap' which take
+     the same sort of predicate, which is applied to all keybindings with
+     word-oriented commands.
+] 
+[Added isUnfocusedOnCurrentWS and fadeInactiveCurrentWSLogHook for better support of fading/opacity on multi monitor setups
+Jesper Reenberg <jesper.reenberg@gmail.com>**20120329141818
+ Ignore-this: d001a8aafbcdedae21ccd1d18f019185
+] 
+[Fixed X.A.GridSelect to be consistent in the way it (now) sorts the shown
+Jesper Reenberg <jesper.reenberg@gmail.com>**20120501180415
+ Ignore-this: 1d0991f9fb44e42f5d1c5a4f427ea661
+ elements when modifying the searchString.
+ 
+ The implemented ordering sorts based on how "deep the needle is in the
+ haystack", meaning that searching for "st" in the elements "Install" and "Study"
+ will order them as "Study" and "Install". Previously there was no ordering and
+ when using GridSelect to select workspaces, the ordering was not consistent, as
+ the list of workspaces (if not modified manually) is ordered by last used. In
+ this case either "Study" or "Install" would come first depending on which
+ workspace was last visited.
+] 
+[Use getXMonadDir to get the default xmonad directory.
+Julia Jomantaite <julia.jomantaite@gmail.com>**20120501121427
+ Ignore-this: a075433761488b76a58a193aeb4e4a25
+] 
+[Minor haddock formatting for X.L.OnHost and X.A.DynamicWorkspaceOrder
+Adam Vogt <vogt.adam@gmail.com>**20120428194552
+ Ignore-this: 843ec567e249cc96d51ca931f1e36514
+] 
+[Remove trailing whitespace.
+Adam Vogt <vogt.adam@gmail.com>**20120428194048
+ Ignore-this: d61584110954e84d3611ef3497a29725
+] 
+[Add emacs-like keys to browse history in XMonad.Prompt
+Carlos Lopez-Camey <c.lopez@kmels.net>**20120421110737
+ Ignore-this: b90345f72007d09a6b732b974c0faf79
+] 
+[Adds an emacs-like Keymap in XMonad.Prompt
+Carlos Lopez-Camey <c.lopez@kmels.net>**20120421012335
+ Ignore-this: f281b8ad01f3d21055e2d6de79af2d79
+] 
+[add 'withNthWorkspace' to DynamicWorkspaceOrder.
+jakob@pipefour.org**20120407184640
+ Ignore-this: f5f87ffe9ddf1a12fab775e6fb8e856f
+ Note this is very similar to the function of the same name exported by
+ DynamicWorkspaces.  Ultimately it would probably be cleaner to
+ generalize the one in DynamicWorkspaces to accept an arbitrary
+ workspace sort as a parameter; this is left as an exercise for future
+ hackers.
+] 
+[XMonad.Layout.OnHost allows host-specific modifications to a layout, which
+allbery.b@gmail.com**20120320030912
+ Ignore-this: 4c0d5580e805ff9f40918308914f3bf9
+ is otherwise very difficult to do.  Similarly to X.L.PerWorkspace, it provides
+ onHost, onHosts, modHost, and modHosts layout modifiers.  It attempts to do
+ smart hostname comparison, such that short names will be matched with short
+ names and FQDNs with FQDNs.
+ 
+ This module currently requires that $HOST be set in the environment.
+ You can use System.Posix.Env.setEnv to do so in xmonad.hs if need be.
+ (Properly, this should be done via the network library, but I'm trying to
+ avoid adding that dependency.)  An alternative would be to shell out to
+ get the name, but that has considerable portability hurdles.
+] 
+[Bump version to 0.10.1
+Adam Vogt <vogt.adam@gmail.com>**20120320005311
+ Ignore-this: f0608ffaa877f605eaa86c45a107a14d
+ 
+ Raising the X11 dependency while keeping the xmonad version the same leads to
+ problems where cabal install uses the dependency versions following hackage,
+ not what is installed.
+] 
+[narrower BorderResize rectangles placed within border edges
+Jens Petersen <juhp@community.haskell.org>**20120314064703
+ Ignore-this: 3a43bbdb7f2317d702edafb231f58802
+ 
+   Change the border resize rectangles to be narrower and only extend
+   inside the window not outside.  Most window managers just seem to use
+   the border decoration area for starting resizes which is often just 1 pixel
+   wide but as a compromise the width is now 2 pixels (before it was 10!).
+   The rectangles are now placed symmetrically within the border and window.
+   This seems to work ok with PositionStoreFloat for the Bluetile config.
+] 
+[add-dynamic-bars-module
+Ben Boeckel <mathstuf@gmail.com>**20120316002204
+ Ignore-this: 41347c8f894d8d0b5095dfad86784cf4
+ 
+ This adds the X.H.DynamicBars module. It allows per-screen status bars to be
+ easily managed and dynamically handles the number of screens changing.
+] 
+[bump X11 dependency so that noModMask is available
+Daniel Wagner <daniel@wagner-home.com>**20120316000302
+ Ignore-this: 971a75dcad25f66848eef4174cd4ddd1
+] 
+[Paste.hs: rm noModMask, shifted definition to X11 binding (see previous email)
+gwern0@gmail.com**20111203203038
+ Ignore-this: dcd164ff8f8f135c8fdef08f42f9244d
+] 
+[GroupNavigation: fix import typo in usage
+Jens Petersen <juhp@community.haskell.org>**20120312103349
+ Ignore-this: 65367218ca50a33a37813469b4616f34
+] 
+[add sendToEmptyWorkspace to FindEmptyWorkspace
+Jens Petersen <juhp@community.haskell.org>**20120312102331
+ Ignore-this: 50e7992d80d2db43e4d0adf5c95e964f
+ 
+ sendToEmptyWorkspace is like tagToEmptyWorkspace except
+ it does not change workspace after moving the window.
+] 
+[xmonad-contrib.cabal: simplify xmonad dependency to >=0.10 && < 0.11
+Jens Petersen <juhp@community.haskell.org>**20120312101800
+ Ignore-this: 1ff5a0caa2a1e3487e9a0831e385b3d2
+ 
+ Unless there is a particular reason for listing the lower and upper bounds
+ separately then this seems simpler and cleaner.
+] 
+[ShowWName: Increase horizontal padding for flash
+crodjer@gmail.com**20120305164517
+ Ignore-this: de5fd30fad2630875c5c78091f07c324
+ 
+ Currently the flash window width leaves a very small amount of padding. This
+ patch adds some extra horizontal width, governed by text width and length.
+] 
+[persist-togglehook-options
+Ben Boeckel <mathstuf@gmail.com>**20120311050143
+ Ignore-this: 580bacb35b617c1198f01c5a7c0d3fef
+ 
+ Save the state of ToggleHook options over a restart.
+] 
+[ShowWName flash window background color
+Rohan Jain <crodjer@gmail.com>**20120306065224
+ Ignore-this: 9cd8fcfc13cc326b9dcc79ef3cc21b26
+ 
+ While calling paintAndWrite for flash window, the background color from config
+ should also be passed on as window background in addition to as text background
+ color. Otherwise the window color gets set to the default black which shows up
+ when text cannot span whole of the window.
+ 
+ This issue becomes visible when the font size is considerably large or even in
+ small size with truetype fonts.
+] 
+[ShowWName: Fix flash location by screen rectangle
+crodjer@gmail.com**20120305161240
+ Ignore-this: 83ec4cce2297efc6736a1fe55f44ee73
+ 
+ In case of using this hook with multiple monitors, the Tag flash was not
+ following the screen's coordinates. This patch shifts the new window created for
+ flash according to the Rectangle defined by the screen.
+] 
+[Fix typo in tabbed layout link for font utils docs
+crodjer@gmail.com**20120229070022
+ Ignore-this: 2f7e90269e08ce08264d7b1d05bb16f9
+] 
+[L.WorkspaceDir: cleanup redundant {definitions,imports}
+Steffen Schuldenzucker <sschuldenzucker@uni-bonn.de>**20120229112124
+ Ignore-this: 7a796b18a64e693e071e9ea3a6a01aa3
+] 
+[fix L.WorkspaceDir special char handling: remove "echo -n" processing
+Steffen Schuldenzucker <sschuldenzucker@uni-bonn.de>**20120227122004
+ Ignore-this: ab48687eb4c9018312089a13fd25ecd8
+] 
+[Add BorderUrgencyHook to XMonad.Hooks.UrgencyHook
+allbery.b@gmail.com**20120225082616
+ Ignore-this: 9fac77914ff28a6e9eb830e8c9c7e21e
+ BorderUrgencyHook is a new UrgencyHook usable with withUrgencyHook or
+ withUrgencyHookC; it allows an urgent window to be given a different
+ border color.  This may not always work as intended, since UrgencyHook
+ likes to assume that a window being visible is sufficient to disable
+ urgency notification; but with suppressWhen = Never it may work well
+ enough.
+ 
+ There is a report that if a new window is created at the wrong time,
+ the wrong window may be marked urgent somehow.  I seem to once again
+ be revealing bugs in underlying packages, although a quick examination
+ of X.H.UrgencyHook doesn't seem to show any way for the wrong window
+ to be selected.
+] 
+[Adding use case for namedScratchpad.
+nicolas.dudebout@gatech.edu**20120122235843
+ Ignore-this: 44201e82bcd708cd7098f060345400f1
+] 
+[Actions.WindowGo: typo fix - trim 's' per cub.uanic https://code.google.com/p/xmonad/issues/detail?id=491
+gwern0@gmail.com**20120116224244
+ Ignore-this: fb1d55c1b4609069c55f13523c091260
+] 
+[XMonad.Actions.PhysicalScreens: fix typo spotted by Chris Pick <haskell@chrispick.com>
+gwern0@gmail.com**20120115223013
+ Ignore-this: eb73b33b07dc58a36d3aa00bc8ac31c2
+] 
+[roll back previous incorrect fix
+Daniel Wagner <daniel@wagner-home.com>**20120111214133
+ Ignore-this: 91496faef411e6ae3442498b528d119b
+] 
+[Extending: fix http://code.google.com/p/xmonad/issues/detail?id=490
+gwern0@gmail.com**20120111211907
+ Ignore-this: 515afbed507c070d60ab547e98682f12
+] 
+[another documentation patch: XMonadContrib.UpdatePointer -> XMonad.Actions.UpdatePointer
+Daniel Wagner <daniel@wagner-home.com>**20120111211226
+ Ignore-this: 1444e4a3f20ba442602ef1811d0b32c7
+] 
+[documentation patch, fixes issue 490
+Daniel Wagner <daniel@wagner-home.com>**20120111210832
+ Ignore-this: 8d899e15f9d1a657e9fc687e2f649f45
+] 
+[X.H.EwmhDesktops note that fullscreenEventHook is not included in ewmh
+Adam Vogt <vogt.adam@gmail.com>**20120102211404
+ Ignore-this: 92f15fa93877c165158c8fbd24aa2360
+ 
+ Just a documentation fix (nomeata's suggestion at issue 339).
+] 
+[X.H.EwmhDesktops haddock formatting.
+Adam Vogt <vogt.adam@gmail.com>**20120102211203
+ Ignore-this: cfff985e4034e06a0fe27c52c9971901
+] 
+[X.A.Navigation2D
+Norbert Zeh <nzeh@cs.dal.ca>**20111208205842
+ Ignore-this: 3860cc71bfc08d99bd8279c2e0945186
+ 
+ This is a new module to support directional navigation across multiple screens.
+ As such it is related to X.A.WindowNavigation and X.L.WindowNavigation, but it
+ is more general.  For a detailed discussion of the differences, see
+ http://www.cs.dal.ca/~nzeh/xmonad/Navigation2D.pdf.
+] 
+[documentation patch: mention PostfixOperators
+Daniel Wagner <daniel@wagner-home.com>**20111210234820
+ Ignore-this: 20a05b1f396f18a742346d6e3daea9a8
+] 
+[P.Shell documentation and add missing unsafePrompt export
+Adam Vogt <vogt.adam@gmail.com>**20111207163951
+ Ignore-this: a03992ffdc9c1a0f5bfa6dafc453b587
+ 
+ Haddock (version 2.9.2 at least) does not attach documentation to any of a b or
+ c when given:
+ 
+     -- | documentation
+     a,b,c :: X
+ 
+] 
+[Paste: 3 more escaped characters from alistra
+gwern0@gmail.com**20111129160335
+ Ignore-this: 46f5b86a25bcd2b26d2e07ed33ffad68
+] 
+[unfuck X.U.Paste
+Daniel Wagner <daniel@wagner-home.com>**20111129032331
+ Ignore-this: d450e23ca026143bb6ca9d744dcdd906
+] 
+[XMonad.Util.Paste: +alistra's patch for fixing his pasting of things like email address (@)
+gwern0@gmail.com**20111128215648
+ Ignore-this: 4af1af27637fe056792aa4f3bb0403eb
+] 
+[XMonad.Util.Paste: rm myself from maintainer field; I don't know how to fix any of it even if I wanted
+gwern0@gmail.com**20111128213001
+ Ignore-this: 87a4996aaa5241428ccb13851c5eb455
+] 
+[XMonad.Prompt.Shell: improve 'env' documentation to cover goodgrue's problem
+gwern0@gmail.com**20111127231507
+ Ignore-this: 7b652a280960cbdf99c236496ca091b0
+] 
+[Fix spelling 'prefered' -> 'preferred'.
+Erik de Castro Lopo <erikd@mega-nerd.com>**20111125010229
+ Ignore-this: f2eac1728b5e023399188becf867a14d
+] 
+[Restore TrackFloating behavior to an earlier version.
+Adam Vogt <vogt.adam@gmail.com>**20111120045538
+ Ignore-this: 1a1367b4171c3ad23b0553766021629f
+ 
+ Thanks for liskni_si for pressing the matter: without this change it is very
+ broken, with the patch it is still not perfect but still useful.
+] 
+[Explicitly list test files in .cabal
+Adam Vogt <vogt.adam@gmail.com>**20111118232511
+ Ignore-this: ac48a0d388293cc6c771d676aaf142e3
+ 
+ In the future, require Cabal >= 1.6 to be able to just write tests/*.hs
+] 
+[TAG 0.10
+Adam Vogt <vogt.adam@gmail.com>**20111118225640
+ Ignore-this: 8f81b175b902e985d584160fc41ab7d1
+] 
 [Export types to reduce haddock warnings.
 Adam Vogt <vogt.adam@gmail.com>**20101023195755
  Ignore-this: 1cac9202784711ce0fc902d14543bab0
@@ -2419,4 +2420,4 @@ Spencer Janssen <spencerjanssen@gmail.com>**20091026013449
  Ignore-this: 542b6105d6deed65e12d1f91c666b0b2
 ] 
 Patch bundle hash:
-50d0a94eb921cc91b6e19bf34357a26e113731da
+0c3a1310226fff16efcdab9070c69fde0e790633

@@ -1,13 +1,13 @@
 --------------------------------------------------------------- Headers {{{
 
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DoRec #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -201,8 +201,8 @@ delKeys (XConfig {modMask = modm}) =
 addKeys :: XConfig l -> [(Key, X ())]
 addKeys (XConfig {modMask = modm}) =
     [
-        -- mod-0 %! Toggle to the workspace displayed previously
-      ((modm, xK_0    ), CWS.toggleWS)
+        -- mod-` %! Toggle to the workspace displayed previously
+      ((modm, xK_grave), CWS.toggleWS)
         -- mod-- %! Switch to the previous workspace
     , ((modm, xK_minus), CWS.prevWS  )
         -- mod-= %! Switch to the next workspace
@@ -291,7 +291,7 @@ myLayoutHook =
   defaultResizeTall = lrt ||| lmt ||| L.Full ||| gimp ||| wsslslrt
   defaultFull = L.Full ||| lrt ||| lmt
 
-  lmt = L.Mirror (L.Tall 1 (3/100) (1/2))
+  lmt = L.Mirror (LRT.ResizableTall 1 (3/100) (1/2) [])
   wsslslrt = LS.mksls 1600 lrt lmc
   lmc = LMC.multiCol [1,1] 2 0.01 (-0.33)
   lrt = LRT.ResizableTall 1 (3/100) (1/2) []

@@ -1,5 +1,4 @@
 xrandr --output LVDS1 --primary
-xmodmap $HOME/lib/X/xmodmap
 urxvtd -q -o -f 2>/dev/null >/dev/null
 xscreensaver -no-splash 2>/dev/null >/dev/null &
 xset b off
