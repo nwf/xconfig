@@ -5,17 +5,18 @@ Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
        , lowerOnStart = True
        , sepChar = "%"
        , alignSep = "}{"
-       , template = "%StdinReader% }{ %multicpu% (%thermal0%|%thermal1% %fanspeed%) | %battery% | %memory% * %swap% | %dynnetwork% | %KBWI% | <fc=#ee9a00>%date%</fc>"
-       , commands = [ Run Weather "KBWI" ["-t","BWI: <tempF>F","-L","50","-H","80","--normal","green","--high","red","--low","lightblue"] 36000
-                    , Run DynNetwork ["-L","0","-H","32","--normal","green","--high","red"] 20
-                    , Run MultiCpu ["-L","25","-H","75","--low","green","--normal","yellow","--high","red"] 20
+       , template = "%UnsafeStdinReader% }{ %multicpu% (%thermal0%|%thermal1% %cat0%) | %battery% | %memory% %swap% | %diskio% | %dynnetwork% | %KBWI% | <fc=#ee9a00>%date%</fc>"
+       , commands = [ Run MultiCpu ["-L","25","-H","75","--low","green","--normal","yellow","--high","red","-t","<total>% <autovbar>"] 20
                     , Run ThermalZone 0 ["-t","<temp>"] 50
                     , Run ThermalZone 1 ["-t","<temp>"] 50
-                    , Run FanSpeed ["-t","<fan>"] 50
+                    , Run CatInt 0 "/sys/devices/platform/thinkpad_hwmon/fan1_input" [] 50
                     , Run Battery ["-t", "<left>"] 20
                     , Run Memory ["-t","<usedratio>%"] 20
                     , Run Swap ["-t","<usedratio>%"] 20
+                    , Run DiskIO [("sda", "<total> <readvbar> <writevbar>")] ["-L","2500","-H","7500","--low","green","--normal","yellow","--high","red"] 20
+                    , Run Weather "KBWI" ["-t","KBWI: <tempF>F","-L","50","-H","80","--normal","green","--high","red","--low","lightblue"] 36000
+                    , Run DynNetwork ["-L","0","-H","32","--normal","green","--high","red"] 20
                     , Run Date "%a %b %_d %Y %H:%M:%S" "date" 10
-                    , Run StdinReader
+                    , Run UnsafeStdinReader
                     ]
        }
