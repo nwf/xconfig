@@ -308,7 +308,8 @@ myLayoutHook =
     LLH.layoutHintsWithPlacement (0.5, 0.5)   -- everybody obeys hinting
   . HMD.avoidStruts                           -- everybody avoids struts
   $ LPW.onWorkspace wkP L.Full                -- presentations always full
-  $ LPW.onWorkspaces [wkW, wkD] defaultFull   -- web and docs default full
+  $ LPW.onWorkspaces [wkC, wkW, wkD] defaultFull  -- some default full and
+                                                  -- have a shorter set
   $ defaultResizeTall                         -- else, default tall
  where
   defaultResizeTall = lrt ||| lmt ||| L.Full ||| gimp ||| wsslslrt
