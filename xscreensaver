@@ -1,5 +1,5 @@
 # XScreenSaver Preferences File
-# Written by xscreensaver-demo 5.11 for nwf on Fri Sep 10 12:39:26 2010.
+# Written by xscreensaver-demo 5.22 for nwf on Sun Dec 15 00:36:47 2013.
 # http://www.jwz.org/xscreensaver/
 
 timeout:	0:10:00
@@ -17,7 +17,7 @@ demoCommand:	xscreensaver-demo
 prefsCommand:	xscreensaver-demo -prefs
 nice:		10
 memoryLimit:	0
-fade:		True
+fade:		False
 unfade:		False
 fadeSeconds:	0:00:03
 fadeTicks:	20
@@ -25,6 +25,7 @@ captureStderr:	True
 ignoreUninstalledPrograms:False
 font:		*-medium-r-*-140-*-m-*
 dpmsEnabled:	True
+dpmsQuickOff:	False
 dpmsStandby:	0:15:00
 dpmsSuspend:	0:20:00
 dpmsOff:	0:30:00
@@ -33,8 +34,8 @@ grabVideoFrames:    False
 chooseRandomImages: False
 imageDirectory:	
 
-mode:		random
-selected:	-1
+mode:		one
+selected:	219
 
 textMode:	date
 textLiteral:	XScreenSaver
@@ -69,8 +70,8 @@ programs:								      \
 				slip -root				    \n\
 				distort -root				    \n\
 				spotlight -root				    \n\
-	      "Ripples (stir)" 	ripples -root -oily -light 2 -stir	    \n\
-	   "Ripples (desktop)" 	ripples -root -water -light 6		    \n\
+-	      "Ripples (stir)" 	ripples -root -oily -light 2 -stir	    \n\
+-	   "Ripples (desktop)" 	ripples -root -water -light 6		    \n\
 				hypercube -root				    \n\
 -				hyperball -root				    \n\
 				halo -root				    \n\
@@ -127,7 +128,7 @@ programs:								      \
 				kumppa -root				    \n\
 				rd-bomb -root				    \n\
 	    "RD-Bomb (mobile)" 	rd-bomb -root -speed 1 -size 0.1	    \n\
-				sonar -root				    \n\
+-				sonar -root				    \n\
 				t3d -root				    \n\
 				penetrate -root				    \n\
 				deluxe -root				    \n\
@@ -149,7 +150,7 @@ programs:								      \
 				ccurve -root				    \n\
 				blaster -root				    \n\
 				bumps -root				    \n\
-				xanalogtv -root				    \n\
+-				xanalogtv -root				    \n\
 				xspirograph -root			    \n\
 				nerverot -root				    \n\
 				xrayswarm -root				    \n\
@@ -195,7 +196,7 @@ programs:								      \
 				boxfit -root				    \n\
 				celtic -root				    \n\
 				cwaves -root				    \n\
-				m6502 -root				    \n\
+-				m6502 -root				    \n\
 				abstractile -root			    \n\
 -				lcdscrub -root				    \n\
 - default-n: 			webcollage -root			    \n\
@@ -213,7 +214,7 @@ programs:								      \
   GL: 				sproingies -root			    \n\
   GL: 				rubik -root				    \n\
   GL: 				atlantis -root				    \n\
-  GL: 				lament -root				    \n\
+- GL: 				lament -root				    \n\
   GL: 				bubble3d -root				    \n\
   GL: 				glplanet -root				    \n\
   GL: 				flurry -root				    \n\
@@ -241,7 +242,7 @@ programs:								      \
 - GL: 				sballs -root				    \n\
   GL: 				cubenetic -root				    \n\
   GL: 				spheremonics -root			    \n\
-  GL: 				lavalite -root				    \n\
+- GL: 				lavalite -root				    \n\
   GL: 				queens -root				    \n\
   GL: 				endgame -root				    \n\
 - GL: 				glblur -root				    \n\
@@ -266,7 +267,7 @@ programs:								      \
   GL: 				noof -root				    \n\
   GL: 				polyhedra -root				    \n\
 - GL: 				antinspect -root			    \n\
-  GL: 				providence -root			    \n\
+- GL: 				providence -root			    \n\
   GL: 	"Pinion (large gears)" 	pinion -root				    \n\
   GL: 	"Pinion (small gears)" 	pinion -root -size 0.2 -scroll 0.3	    \n\
   GL: 				boing -root -lighting -smooth		    \n\
@@ -274,11 +275,12 @@ programs:								      \
   GL: 				fliptext -root				    \n\
 - GL: 				antmaze -root				    \n\
   GL: 				tangram -root				    \n\
-  GL: 				crackberg -root				    \n\
+  GL: 				crackberg -root -no-crack -wireframe	      \
+				  -color plain				    \n\
   GL: 				glhanoi -root				    \n\
   GL: 				cube21 -root				    \n\
   GL: 				timetunnel -root			    \n\
-  GL: 				juggler3d -root				    \n\
+- GL: 				juggler3d -root				    \n\
   GL: 				topblock -root				    \n\
   GL: 				glschool -root				    \n\
   GL: 				glcells -root				    \n\
@@ -302,17 +304,33 @@ programs:								      \
 -				goban -root				    \n\
 -				electricsheep				    \n\
 -				cosmos -root				    \n\
-- GL: 				sphereEversion --root			    \n\
+  GL: 				sphereEversion --root			    \n\
 - GL: 				fireflies -root				    \n\
+				attraction -root			    \n\
+				qix -root				    \n\
+				ripples -root				    \n\
+				zoom -root				    \n\
+- GL: 				surfaces -root				    \n\
+- GL: 				pinion -root				    \n\
+- GL: 				photopile -root				    \n\
+- GL: 				skytentacles -root			    \n\
+- GL: 				rubikblocks -root			    \n\
+- GL: 				companioncube -root			    \n\
+- GL: 				hilbert -root				    \n\
+- GL: 				tronbit -root				    \n\
+				unicode -root				    \n\
+				hexadrop -root				    \n\
+  GL: 				kaleidocycle -root			    \n\
+  GL: 				quasicrystal -root			    \n\
+  GL: 				unknownpleasures -root			    \n\
 
 
 pointerPollTime:    0:00:05
 pointerHysteresis:  10
 windowCreationTimeout:0:00:30
 initialDelay:	0:00:00
-sgiSaverExtension:  True
-xidleExtension:	True
 GetViewPortIsFullOfLies:False
 procInterrupts:	True
+xinputExtensionDev: False
 overlayStderr:	True
 
