@@ -206,6 +206,7 @@ delKeys (XConfig {modMask = modm}) =
         -- mod-q %! Remove this; I almost invariably end up hitting it by
         -- mistake and doing my xmonad restarts from the CLI
         (modm, xK_q)
+    ,   (modm .|. shiftMask, xK_slash)
     ]
 
 addKeys :: XConfig l -> [(Key, X ())]
