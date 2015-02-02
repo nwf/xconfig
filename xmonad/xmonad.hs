@@ -51,9 +51,9 @@ import qualified XMonad.Util.WorkspaceCompare as UWC
 
 import Control.Applicative ((<$>))
 import Control.Monad (ap,when) -- liftM2
-import Data.Maybe (fromJust, isNothing)
-import qualified Data.Map as M
 import Data.List (find, isPrefixOf) -- stripPrefix
+import qualified Data.Map as M
+import Data.Maybe (fromJust, isNothing)
 import Data.Monoid (All(All), mappend)
 import Data.Ratio ((%))
 import qualified Data.Set as Set
@@ -89,6 +89,17 @@ findScreenByTag :: WorkspaceId
                                  Window ScreenId ScreenDetail))
 findScreenByTag i = gets (S.screens . windowset) 
                   >>= return . find ((== i) . (S.tag . S.workspace))
+
+{-
+-- | Do some operation but re-focus on the screen thereafter.  Useful as a
+-- workaround, but somewhat unfortunate.
+holdScreenFocus :: X a -> X a
+holdScreenFocus a = do
+  s <- gets (S.screen . S.current . windowset)
+  r <- a
+  screenWorkspace s >>= maybe (return ()) (windows . S.view)
+  return r
+-}
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------ Workspaces {{{
@@ -330,7 +341,8 @@ main = do
              ] Nothing
   -}
   xmonad $ HUH.withUrgencyHook HUH.NoUrgencyHook
-         $ customKeys defaultConfig
+         $ customKeys
+         $ def
       { modMask = mod4Mask
       , terminal = "urxvtcd"
       , workspaces = privworkspaces ++ deflworkspaces ++ addlworkspaces
