@@ -15,6 +15,7 @@ import           XMonad
 -- import qualified XMonad.Core as C
 import qualified XMonad.Actions.CopyWindow as CW
 import qualified XMonad.Actions.CycleWS as CWS
+import qualified XMonad.Actions.DynamicWorkspaceGroups as ADWG
 -- import qualified XMonad.Actions.DynamicWorkspaces as ADW
 import qualified XMonad.Actions.Eval as AE
 import qualified XMonad.Actions.Submap as AS
@@ -252,6 +253,9 @@ addKeys (XConfig {modMask = modm}) =
         -- mod-`
     -- , ((modm, xK_quoteleft), return ())
         -- mod-{F1-F12,1-9}
+        -- mod-/ and mod-? %! Jump to or memorize a workspace group
+    , ((modm              , xK_slash), ADWG.viewWSGroup       "modslash")
+    , ((modm .|. shiftMask, xK_slash), ADWG.addCurrentWSGroup "modslash")
     ] ++ [((modm .|. m .|. m', k), windows $ f i)
           | (i, (k, m')) <-
                 zip privworkspaces (map (,0)        [xK_F1..xK_F12])
