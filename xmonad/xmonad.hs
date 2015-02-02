@@ -45,6 +45,7 @@ import qualified XMonad.Util.Cursor as UC
 -- import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.EZConfig as EZC
 import qualified XMonad.Util.WindowProperties as UW
+import qualified XMonad.Util.WorkspaceCompare as UWC
 
 
 import Control.Applicative ((<$>))
@@ -54,6 +55,7 @@ import qualified Data.Map as M
 import Data.List (find, isPrefixOf) -- stripPrefix
 import Data.Monoid (All(All), mappend)
 import Data.Ratio ((%))
+import qualified Data.Set as Set
 -- import qualified Language.Haskell.TH as TH
 -- import System.FilePath ((</>))
 -- import System.IO (hPutStrLn, stderr)
@@ -105,16 +107,12 @@ privworkspaces = [wkC,wkW,wkD,wkM,wkP]
 deflworkspaces = map show [(1::Int)..9]
 addlworkspaces = map (("A" ++) . show) [(1::Int)..9]
 
--- | Find an empty "default" or "additional" workspace.
-findEmptyNumWorkspaceTag :: S.StackSet String l a s sd
-                         -> String
-findEmptyNumWorkspaceTag ss = maybe (last searchset)
-                                 (S.tag)
-                         $ find (isNothing . S.stack)
-                         $ filter (flip elem searchset . S.tag)
-                         $ S.workspaces ss
+-- | Predicate for empty "default" or "additional" workspace.
+isEmptyNumWorkspace :: X (WindowSpace -> Bool)
+isEmptyNumWorkspace = return $ \ws -> (isNothing $ S.stack ws)
+                                   && (S.tag ws `Set.member` searchset)
  where
-  searchset = deflworkspaces ++ addlworkspaces
+  searchset = Set.fromList $ deflworkspaces ++ addlworkspaces
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------- Management hook {{{
@@ -247,14 +245,10 @@ addKeys (XConfig {modMask = modm}) =
         , ((0, xK_z), asks (terminal . config) >>= \t -> spawn t)
         ])
         -- mod-\ %! Switch to an unused numeric workspace
-    , ((modm, xK_backslash),
-         windows $ \ss -> let t = findEmptyNumWorkspaceTag ss in
-                   flip S.greedyView ss t)
+    , ((modm, xK_backslash), CWS.moveTo CWS.Next (CWS.WSIs isEmptyNumWorkspace))
         -- mod-| %! Move the focused window to an unused workspace and then
         -- focus there.
-    , ((modm .|. shiftMask, xK_backslash),
-         windows $ \ss -> let t = findEmptyNumWorkspaceTag ss in
-                   flip S.greedyView (S.shift t ss) t)
+    , ((modm .|. shiftMask, xK_backslash), mtsc)
         -- mod-`
     -- , ((modm, xK_quoteleft), return ())
         -- mod-{F1-F12,1-9}
@@ -269,6 +263,9 @@ addKeys (XConfig {modMask = modm}) =
   where
    xsl = spawn "xscreensaver-command -lock"
    smhmdts = sendMessage HMD.ToggleStruts
+
+   mtsc = CWS.doTo CWS.Next (CWS.WSIs isEmptyNumWorkspace) UWC.getSortByIndex $
+          windows . shiftThenView
 
    togglevga = do
      (screencount :: Int) <- LIS.countScreens
