@@ -268,13 +268,17 @@ addKeys (XConfig {modMask = modm}) =
         -- mod-/ and mod-? %! Jump to or memorize a workspace group
     , ((modm              , xK_slash), ADWG.viewWSGroup       "modslash")
     , ((modm .|. shiftMask, xK_slash), ADWG.addCurrentWSGroup "modslash")
+        -- mod-{F1-F12,1-9,alt&1-9}
+        --   No additional mods to view,
+        --   Shift to move current window to,
+        --   Control+Shift to move current window to and follow
     ] ++ [((modm .|. m .|. m', k), windows $ f i)
           | (i, (k, m')) <-
                 zip privworkspaces (map (,0)        [xK_F1..xK_F12])
              ++ zip deflworkspaces (map (,0)        [xK_1 ..xK_9  ])
              ++ zip addlworkspaces (map (,mod1Mask) [xK_1 ..xK_9  ])
           , (f, m) <- [(S.greedyView, 0), (S.shift, shiftMask)
-                      ,(CW.copy, shiftMask .|. controlMask)]
+                      ,(shiftThenView, shiftMask .|. controlMask)]
                       ]
   where
    xsl = spawn "xscreensaver-command -lock"
@@ -282,6 +286,8 @@ addKeys (XConfig {modMask = modm}) =
 
    mtsc = CWS.doTo CWS.Next (CWS.WSIs isEmptyNumWorkspace) UWC.getSortByIndex $
           windows . shiftThenView
+
+   shiftThenView wsid = S.greedyView wsid . S.shift wsid
 
    togglevga = do
      (screencount :: Int) <- LIS.countScreens
