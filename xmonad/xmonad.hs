@@ -139,7 +139,7 @@ myManageHook :: ManageHook
 myManageHook = composeAll $ [shift, float]
      where
    myClassFloats = ["XVkbd", "Xmessage", "MPlayer"]
-   myTitleFloats = ["KCharSelect"]
+   myTitleFloats = ["KCharSelect", "wicd-curses"]
    
    shift = HMH.composeOne $
         [ HMH.transience
@@ -253,7 +253,7 @@ addKeys (XConfig {modMask = modm}) =
         , ((0, xK_m), AXB.togglemyxmobar)
         , ((0, xK_r), spawn "gmrun")
         , ((0, xK_v), spawn "gvim")
-        , ((0, xK_w), asks (terminal . config) >>= \t -> spawn $ t ++ " -e wicd-curses")
+        , ((0, xK_w), asks (terminal . config) >>= \t -> spawn $ t ++ " -g 100x40 -e wicd-curses")
         , ((0, xK_z), asks (terminal . config) >>= \t -> spawn t)
         ])
         -- mod-\ %! Switch to an unused numeric workspace
