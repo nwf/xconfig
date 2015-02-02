@@ -262,9 +262,13 @@ addKeys (XConfig {modMask = modm}) =
         -- mod-| %! Move the focused window to an unused workspace and then
         -- focus there.
     , ((modm .|. shiftMask, xK_backslash), mtsc)
-        -- mod-`
-    -- , ((modm, xK_quoteleft), return ())
-        -- mod-{F1-F12,1-9}
+        -- mod-s %! Swap contents of current screen with next; focus stays
+        -- here.  Note that this is different from CWS.toggleWS, which
+        -- switches focus to the next *invisible* workspace.
+    , ((modm,               xK_s), CWS.swapNextScreen)
+        -- mod-q %! Focus on next screen or move window to next screen
+    , ((modm,               xK_q), CWS.nextScreen)
+    , ((modm .|. shiftMask, xK_q), CWS.shiftNextScreen)
         -- mod-/ and mod-? %! Jump to or memorize a workspace group
     , ((modm              , xK_slash), ADWG.viewWSGroup       "modslash")
     , ((modm .|. shiftMask, xK_slash), ADWG.addCurrentWSGroup "modslash")
