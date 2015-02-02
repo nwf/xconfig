@@ -7,14 +7,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module XMonad.Actions.XMobars (
-		ensureanxmobar,
-		togglemyxmobar,
-		updatexmobars,
-		killxmobars,
-		xmobarEH,
-        xmobarLH,
-	) where
-
+         ensureanxmobar,
+         togglemyxmobar,
+         updatexmobars,
+         killxmobars,
+         xmobarEH,
+         xmobarLH,
+) where
 
 import           XMonad
 import qualified XMonad.Hooks.DynamicLog as HDL
@@ -166,9 +165,10 @@ xmobarLH = do
      UE.get >>= IM.foldWithKey (\s (h,_) a -> a >>
             HDL.dynamicLogWithPP (base
             { HDL.ppOutput = hPutStrLn h
-            , HDL.ppTitle = HDL.xmobarColor "goldenrod" "" . HDL.shorten 40
+            , HDL.ppTitle = HDL.xmobarColor "goldenrod" ""
+            , HDL.ppTitleSanitize = xmoRaw . HDL.shorten 40
             , HDL.ppLayout = \n -> maybe n id $ stripPrefix "Hinted " n
-            , HDL.ppCurrent = HDL.xmobarColor "blue" "" .
+            , HDL.ppCurrent = HDL.xmobarColor "red" "" .
                  if (S s) /= S.screen (S.current ws)
                   then HDL.wrap "{" "}"
                   else HDL.wrap "[" "]"
@@ -184,6 +184,7 @@ xmobarLH = do
             }))
         (return ()) . (xmScreenState)
  where base = HDL.xmobarPP
+       xmoRaw x = "<raw=" ++ (show (length x)) ++ ":" ++ x ++ "/>"
 
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------ Event hook {{{
