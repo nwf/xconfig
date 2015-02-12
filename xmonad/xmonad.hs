@@ -164,7 +164,7 @@ myManageHook = composeAll $ [shift, float]
 
 
 ----------------------------------------------------------------------- }}}
---------------------------------------------- Action.Eval configuration {{{
+------------------ Action.Eval configuration (including static disable) {{{
 
 myEvalConfig :: AE.EvalConfig
 myEvalConfig = AE.defaultEvalConfig
@@ -188,12 +188,16 @@ myEvalConfig = AE.defaultEvalConfig
 -}
 
 evalprompt :: X ()
-evalprompt = do
+evalprompt =
+ if False   -- Static disable to reduce the size of the executable since
+            -- this is very rarely useful.  (But when it *is* ...)
+  then do
     a <- asks (messageHook.config) 
     -- xmd <- getXMonadDir
     PE.evalPromptWithOutput myEvalConfig
         P.amberXPConfig $
        \r -> when (not $ r `elem` ["()",""]) (a $ replace r "\\n" "\n")
+  else return ()
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Keyboard handling {{{
@@ -240,7 +244,7 @@ addKeys (XConfig {modMask = modm}) =
         -- for ResizableTall layouts
     , ((modm .|. shiftMask, xK_l ), sendMessage LRT.MirrorShrink)
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
-        -- mod-v %! haskell prompt
+        -- mod-v %! haskell prompt, if statically enabled (is huge!)
     , ((modm, xK_v ), evalprompt )
         -- mod-z %! some utility commands squirreled away behind a submap
     , ((modm, xK_z ), AS.submap . M.fromList $
