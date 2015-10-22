@@ -4,6 +4,7 @@
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE PatternGuards #-}
@@ -47,6 +48,7 @@ import qualified XMonad.Util.Cursor as UC
 import qualified XMonad.Util.EZConfig as EZC
 import qualified XMonad.Util.WindowProperties as UW
 import qualified XMonad.Util.WorkspaceCompare as UWC
+import qualified XMonad.Util.XRandRUtils as UXRR
 
 
 import Control.Applicative ((<$>))
@@ -250,7 +252,8 @@ addKeys (XConfig {modMask = modm}) =
     , ((modm, xK_z ), AS.submap . M.fromList $
         [ ((0, xK_b), spawn "blueman-manager")
         , ((0, xK_c), spawn "kcharselect")
-        , ((0, xK_d), togglevga)
+        , ((0, xK_d), toggledisplay "HDMI1")
+        , ((shiftMask, xK_d), toggledisplay "VGA1")
         , ((0, xK_f), spawn "firefox --no-remote -P default")
         , ((shiftMask, xK_f), spawn "firefox --no-remote -P Flash")
         , ((0, xK_g), spawn "chromium")
@@ -297,11 +300,16 @@ addKeys (XConfig {modMask = modm}) =
 
    shiftThenView wsid = S.greedyView wsid . S.shift wsid
 
-   togglevga = do
-     (screencount :: Int) <- LIS.countScreens
-     if screencount > 1
-      then spawn "xrandr --output VGA1 --off"
-      else spawn "xrandr --output VGA1 --auto --right-of LVDS1"
+   toggledisplay d = do
+     UXRR.getXRRConnStatus d >>= \ case
+       Nothing               -> pure ()  -- no such output
+       Just (UXRR.XCSOff   ) -> pure ()  -- nothing there to turn on
+       Just (UXRR.XCSDiscon) -> off
+       Just (UXRR.XCSConn  ) ->
+         spawn $ "xrandr --output " ++ d ++ " --auto --right-of LVDS1"
+       Just (UXRR.XCSEna   ) -> off
+    where
+     off = spawn $ "xrandr --output " ++ d ++ " --off"
 
 -- we might consider hooking 0x1008FF2C (eject) which I use as a hog-killer
 
