@@ -23,7 +23,7 @@ import qualified XMonad.Util.ExtensibleState as UE
 import qualified XMonad.Util.Run as UR
 import qualified XMonad.Util.WindowProperties as UW
 
-import Control.Exception (onException)
+import Control.Exception (SomeException, handle)
 import Control.Monad (foldM,when)
 import qualified Data.IntMap as IM
 import Data.List (find, stripPrefix)
@@ -46,13 +46,13 @@ data XMobars = XMobars {
     , xmScreenIntent :: IM.IntMap (Maybe String)
     , xmWinScreen :: M.Map Window ScreenId
     , xmScreenWin :: IM.IntMap Window
-        -- Configuration variables 
+        -- Configuration variables
     -- , xmProgName :: String
     -- , xmDefaultConfig :: String
     }
   deriving (Typeable)
 instance ExtensionClass XMobars where
-    initialValue = XMobars M.empty IM.empty IM.empty M.empty IM.empty 
+    initialValue = XMobars M.empty IM.empty IM.empty M.empty IM.empty
     extensionType = PersistentExtension
 instance Show XMobars where
     show x = "XMobars (" ++ (show $ xmScreenIntent x) ++ ")"
@@ -71,8 +71,8 @@ killxmobar dokill xmbs (S ix) = do
   case IM.lookup ix (xmScreenState xmbs) of
     Nothing -> return xmbs
     Just (h, pid) -> do
-      when dokill $ killpid pid `onException` return ()
-      hClose h
+      when dokill $ killpid pid
+      ignoreExn (hClose h)
       return $ xmbs
         { xmPidScreen =    M.delete pid (xmPidScreen   xmbs)
         , xmScreenState = IM.delete ix  (xmScreenState xmbs)
@@ -108,7 +108,7 @@ updatexmobars_ xmbs = do
 
   -- io $ hPutStrLn stderr $ "updatexmobar killing " ++ (show kills)
 
-  mapM_ (\(h,p) -> io $ killpid p >> hClose h) kills
+  mapM_ (\(h,p) -> io $ killpid p >> ignoreExn (hClose h)) kills
   let sk = map snd kills
   let nps = foldl (flip M.delete) (xmPidScreen xmbs) sk
   let ws = map (flip IM.lookup (xmScreenWin xmbs) . fromIntegral) sk
@@ -117,7 +117,7 @@ updatexmobars_ xmbs = do
                            Nothing -> a
                            Just x' -> M.delete x' a) (xmWinScreen xmbs) ws
   foldM (\a b -> io $ updatexmobar a (S b))
-        (xmbs { xmPidScreen = nps 
+        (xmbs { xmPidScreen = nps
               , xmWinScreen = nws
               , xmScreenWin = nsw})
         (IM.keys $ fst . IM.split screencount $ xmScreenIntent xmbs)
@@ -126,7 +126,7 @@ updatexmobars :: X ()
 updatexmobars = UE.put =<< updatexmobars_ =<< UE.get
 
 ensureanxmobar_ :: ScreenId -> String -> XMobars -> XMobars
-ensureanxmobar_ (S s) c xmbs = 
+ensureanxmobar_ (S s) c xmbs =
   case IM.lookup s (xmScreenIntent xmbs) of
     Just (Just _) -> xmbs
     _             -> xmbs { xmScreenIntent = IM.insert s (Just c)
@@ -162,7 +162,8 @@ killxmobars = do
 xmobarLH :: X ()
 xmobarLH = do
      ws <- gets windowset
-     UE.get >>= IM.foldWithKey (\s (h,_) a -> a >>
+     (xmScreenState <$> UE.get)
+      >>= IM.foldWithKey (\s (h,_) a -> a >>
             HDL.dynamicLogWithPP (base
             { HDL.ppOutput = hPutStrLn h
             , HDL.ppTitle = HDL.xmobarColor "goldenrod" ""
@@ -232,7 +233,11 @@ xmobarEH (DestroyWindowEvent {ev_window = w}) = do
 xmobarEH _ = return$All True
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------------------- Utils {{{
+
+ignoreExn :: IO () -> IO ()
+ignoreExn = handle (\(_ :: SomeException) -> return ())
+
 killpid :: MonadIO m => ProcessID -> m ()
-killpid = io . signalProcess keyboardSignal
+killpid = io . ignoreExn . signalProcess keyboardSignal
 ----------------------------------------------------------------------- }}}
 -- vim: tw=76 ts=4 expandtab nu ai foldmethod=marker
