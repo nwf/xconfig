@@ -31,7 +31,6 @@ data XRRConnStatus = XCSOff     -- ^ Disconnected and no CRTC
                    | XCSDiscon  -- ^ Disconnected but asssigned CRTC
                    | XCSConn    -- ^ Connected but no assigned CRTC
                    | XCSEna     -- ^ Connected and assigned CRTC
-                   | XCS
  deriving (Show)
 
 getXRRConnStatus :: String -> X (Maybe XRRConnStatus)
