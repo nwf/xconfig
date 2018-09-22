@@ -1,0 +1,10 @@
+! now managed by xorg.conf; see XkbOptions.  Currently, that's set to
+!   ctrl:nocaps,lv3:ralt_switch,compose:menu-altgr
+! or
+!   ctrl:nocaps,ctrl:lctrl_meta,lv3:ralt_switch_multikey
+
+remove Lock = Caps_Lock
+keysym Caps_Lock = Control_L
+add Control = Control_L
+
+keysym Alt_R = Multi_key

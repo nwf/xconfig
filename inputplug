@@ -1,0 +1,40 @@
+#!/bin/bash
+
+EVENT=$1
+DEVNO=$2
+DEVTY=$3
+DEVNAME=$4
+
+case ${EVENT} in
+  XIDeviceEnabled)
+    case ${DEVTY} in
+      XISlaveKeyboard)
+        case ${DEVNAME} in
+          "ErgoDox EZ ErgoDox EZ")
+            echo "ErgoDox on xinput ${DEVNO}"
+            # ergodox.xkb generated with something like
+            # setxkbmap -option '' -option 'lv3:ralt_switch_multikey' -print | xkbcomp -xkb - $HOME/lib/X/ergodox.xkb
+            xkbcomp -i ${DEVNO} $HOME/lib/X/ergodox.xkb ${DISPLAY} 2>/dev/null
+            ;;
+          # *)
+          #   DEVPATH=$(xinput list-props ${DEVNO} | awk '/Device Node/{print $4}')
+          #   if [ -n "${DEVPATH}" ]; then
+          #     DEVPATH=${DEVPATH%\"}
+          #     DEVPATH=${DEVPATH#\"}
+          #     echo ${DEVNO} path is ${DEVPATH}
+          #     # udevadm info --query=property --name=${DEVPATH}
+          #   fi
+          #   ;;
+        esac
+      ;;
+      XISlavePointer)
+        case ${DEVNAME} in
+          "SynPS/2 Synaptics TouchPad")
+            echo "Disabling trackpad on xinput ${DEVNO}"
+            xinput set-prop ${DEVNO} "Device Enabled" 0
+          ;;
+        esac
+      ;;
+    esac
+  ;;
+esac
