@@ -179,11 +179,19 @@ xmobarLH = do
                   let scr = fromJust $ find ((== w) . S.tag . S.workspace)
                                             (S.visible ws)
                   in if (S s) == S.screen scr
-                      then HDL.wrap "<" ">" w
+                      then HDL.xmobarColor "red" "" w
                       else HDL.ppVisible base w
-            , HDL.ppUrgent = HDL.xmobarColor "darkgoldenrod" "green" 
+            , HDL.ppUrgent = HDL.xmobarColor "darkgoldenrod" "green"
+            , HDL.ppHidden = \w ->
+                let S.StackSet { S.hidden = wsh } = ws in
+                case wsh of (w' : _) | (S.tag w') == w -> HDL.xmobarColor "darkgray" "" w
+                            _                          -> HDL.ppHidden base w
+            , HDL.ppHiddenNoWindows = \w ->
+                let S.StackSet { S.hidden = wsh } = ws in
+                case wsh of (w' : _) | (S.tag w') == w -> HDL.xmobarColor "darkgray" "" $ HDL.wrap "-" "-" w
+                            _                          -> HDL.ppHiddenNoWindows base w
             }))
-        (return ()) . (xmScreenState)
+            (return ())
  where base = HDL.xmobarPP
        xmoRaw x = "<raw=" ++ (show (length x)) ++ ":" ++ x ++ "/>"
 
