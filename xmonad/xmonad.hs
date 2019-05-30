@@ -1,5 +1,6 @@
 --------------------------------------------------------------- Headers {{{
 
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE EmptyDataDecls #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -18,7 +19,6 @@ import qualified XMonad.Actions.CopyWindow as CW
 import qualified XMonad.Actions.CycleWS as CWS
 import qualified XMonad.Actions.DynamicWorkspaceGroups as ADWG
 -- import qualified XMonad.Actions.DynamicWorkspaces as ADW
-import qualified XMonad.Actions.Eval as AE
 import qualified XMonad.Actions.Submap as AS
 import qualified XMonad.Actions.Warp as AW
 import qualified XMonad.Actions.WithAll as AWA
@@ -39,7 +39,6 @@ import qualified XMonad.Layout.Reflect as LR
 import qualified XMonad.Layout.ResizableTile as LRT
 import qualified XMonad.Layout.SLS as LS 
 import qualified XMonad.Prompt as P
-import qualified XMonad.Prompt.Eval as PE
 -- import qualified XMonad.Prompt.Input as PI
 import qualified XMonad.Prompt.Window as PW
 import qualified XMonad.StackSet as S
@@ -49,6 +48,11 @@ import qualified XMonad.Util.EZConfig as EZC
 import qualified XMonad.Util.WindowProperties as UW
 import qualified XMonad.Util.WorkspaceCompare as UWC
 import qualified XMonad.Util.XRandRUtils as UXRR
+
+#ifdef BUILD_EVAL
+import qualified XMonad.Actions.Eval as AE
+import qualified XMonad.Prompt.Eval as PE
+#endif
 
 
 import Control.Applicative ((<$>))
@@ -168,6 +172,7 @@ myManageHook = composeAll $ [shift, float]
 ----------------------------------------------------------------------- }}}
 ------------------ Action.Eval configuration (including static disable) {{{
 
+#ifdef BUILD_EVAL
 myEvalConfig :: AE.EvalConfig
 myEvalConfig = AE.defaultEvalConfig
              { AE.imports = [("Prelude",Nothing)
@@ -190,16 +195,12 @@ myEvalConfig = AE.defaultEvalConfig
 -}
 
 evalprompt :: X ()
-evalprompt =
- if False   -- Static disable to reduce the size of the executable since
-            -- this is very rarely useful.  (But when it *is* ...)
-  then do
+evalprompt = do
     a <- asks (messageHook.config) 
-    -- xmd <- getXMonadDir
     PE.evalPromptWithOutput myEvalConfig
         P.amberXPConfig $
        \r -> when (not $ r `elem` ["()",""]) (a $ replace r "\\n" "\n")
-  else return ()
+#endif
 
 ----------------------------------------------------------------------- }}}
 ----------------------------------------------------- Keyboard handling {{{
@@ -246,8 +247,12 @@ addKeys (XConfig {modMask = modm}) =
         -- for ResizableTall layouts
     , ((modm .|. shiftMask, xK_l ), sendMessage LRT.MirrorShrink)
     , ((modm .|. shiftMask, xK_h ), sendMessage LRT.MirrorExpand)
+
+#ifdef BUILD_EVAL
         -- mod-v %! haskell prompt, if statically enabled (is huge!)
     , ((modm, xK_v ), evalprompt )
+#endif
+
         -- mod-z %! some utility commands squirreled away behind a submap
     , ((modm, xK_z ), AS.submap . M.fromList $
         [ ((0, xK_b), spawn "blueman-manager")
