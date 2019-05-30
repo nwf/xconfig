@@ -1,4 +1,10 @@
-URxvt.foreground: darkgoldenrod
-URxvt.background: black
 URxvt.urgentOnBell: true
+URxvt.visualBell: false
 URxvt.searchable-scrollback: CM-s
+
+URxvt.foreground: goldenrod
+URxvt.background: black
+URxvt.font: xft:Bitstream Vera Sans Mono:pixelsize=13
+
+urxvt*color4:     #3030ff
+urxvt*color12:    #7070ff
