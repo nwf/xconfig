@@ -107,6 +107,9 @@ holdScreenFocus a = do
   return r
 -}
 
+nextHNEWS = CWS.moveTo CWS.Next CWS.HiddenNonEmptyWS
+prevHNEWS = CWS.moveTo CWS.Prev CWS.HiddenNonEmptyWS
+
 ----------------------------------------------------------------------- }}}
 ------------------------------------------------------------ Workspaces {{{
 
@@ -222,9 +225,19 @@ addKeys (XConfig {modMask = modm}) =
         -- mod-` %! Toggle to the workspace displayed previously
       ((modm, xK_grave), CWS.toggleWS)
         -- mod-- %! Switch to the previous workspace
-    , ((modm, xK_minus), CWS.prevWS  )
+    , ((modm, xK_minus), prevHNEWS  )
+        -- mod-pageup %! same as mod--
+    , ((modm, xK_Prior), prevHNEWS  )
+        -- mod-down %! same as mod--
+    , ((modm, xK_Down), prevHNEWS)
+
         -- mod-= %! Switch to the next workspace
-    , ((modm, xK_equal), CWS.nextWS  )
+    , ((modm, xK_equal), nextHNEWS  )
+        -- mod-pagedown %! Switch to the next workspace
+    , ((modm, xK_Next ), nextHNEWS  )
+        -- mod-up %! same as mod--
+    , ((modm, xK_Up), nextHNEWS)
+
         -- mod-a %! Warp to top left of currently focused window
     , ((modm, xK_a    ), AW.warpToWindow (1%10) (1%10))
         -- mod-b %! Toggle Struts
