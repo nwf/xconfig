@@ -1,7 +1,7 @@
-Config { font = "-misc-fixed-*-*-*-*-10-*-*-*-*-*-*-*"
+Config { font = "-misc-fixed-*-*-*-*-15-*-*-*-*-*-*-*"
        , bgColor = "black"
        , fgColor = "darkgoldenrod"
-       , position = Top
+       , position = TopP 38 0
        , lowerOnStart = True
        , sepChar = "%"
        , alignSep = "}{"
